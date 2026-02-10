@@ -129,7 +129,7 @@ static HSM_EVENT app_state_run_handler(HSM *This, HSM_EVENT event, void *param) 
         	break;
         case HSME_COMM_RECEIVED_OK:
         	for(uint16_t i = 0; i < TOTAL_BAT_REGISTERS; i++) {
-        		me->dataModbusSlave[i] = me->dataModbusMaster[i];
+        		me->dataModbusSlave[i] = me->dataBattery[i];
         	}
         	// Check Emergency
         	if(me->dataModbusSlave[REG_STA_IS_EMERGENCY_STOP]) {
