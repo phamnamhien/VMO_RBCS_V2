@@ -122,15 +122,19 @@ static HSM_EVENT app_state_run_handler(HSM *This, HSM_EVENT event, void *param) 
         	me->dataModbusSlave[REG_STA_IS_PIN_IN_SLOT] = SLOT_FULL;
         	break;
         case HSME_SWITCH_LIMIT_PASSTIVE:
-        	for(uint16_t i = 0; i < TOTAL_BAT_REGISTERS; i++) {
+        	/* Pin removed: clear ALL registers (battery + station control) */
+        	for(uint16_t i = 0; i < TOTAL_STA_REGISTERS; i++) {
         		me->dataModbusSlave[i] = 0;
         	}
+        	for(uint16_t i = 0; i < TOTAL_BAT_REGISTERS; i++) {
+        		me->dataBattery[i] = 0;
+        	}
         	me->dataModbusSlave[REG_STA_IS_PIN_IN_SLOT] = SLOT_EMPTY;
+        	/* Safety: turn off charge and emergency outputs */
+        	HAL_GPIO_WritePin(CHARGE_CTRL_GPIO_Port, CHARGE_CTRL_Pin, CHRG_OFF);
+        	HAL_GPIO_WritePin(EMERGENCY_GPIO_Port, EMERGENCY_Pin, EM_PASSTIVE);
         	break;
         case HSME_COMM_RECEIVED_OK:
-        	for(uint16_t i = 0; i < TOTAL_BAT_REGISTERS; i++) {
-        		me->dataModbusSlave[i] = me->dataBattery[i];
-        	}
         	// Check Emergency
         	if(me->dataModbusSlave[REG_STA_IS_EMERGENCY_STOP]) {
         		HAL_GPIO_WritePin(EMERGENCY_GPIO_Port, EMERGENCY_Pin, EM_ACTIVE);
@@ -150,13 +154,23 @@ static HSM_EVENT app_state_run_handler(HSM *This, HSM_EVENT event, void *param) 
         	break;
 
         case HSME_BAT_RECEIVED_TIMEOUT:
+        	/* CAN timeout: clear battery data + control registers, turn off GPIOs */
         	for(uint16_t i = 0; i < TOTAL_BAT_REGISTERS; i++) {
         		me->dataModbusSlave[i] = 0;
+        		me->dataBattery[i] = 0;
         	}
+        	me->dataModbusSlave[REG_STA_IS_EMERGENCY_STOP] = 0;
+        	me->dataModbusSlave[REG_STA_CHRG_CTRL] = 0;
+        	HAL_GPIO_WritePin(CHARGE_CTRL_GPIO_Port, CHARGE_CTRL_Pin, CHRG_OFF);
+        	HAL_GPIO_WritePin(EMERGENCY_GPIO_Port, EMERGENCY_Pin, EM_PASSTIVE);
         	me->dataModbusSlave[REG_STA_IS_PIN_TIMEOUT] = 1;
         	HSM_Tran(This, &app_state_bat_not_connected, 0, NULL);
         	break;
         case HSME_BAT_RECEIVED_OK:
+        	/* Copy fresh CAN data to Modbus registers */
+        	for(uint16_t i = 0; i < TOTAL_BAT_REGISTERS; i++) {
+        		me->dataModbusSlave[i] = me->dataBattery[i];
+        	}
         	me->dataModbusSlave[REG_STA_IS_PIN_TIMEOUT] = 0;
         	// Check Fault:
         	if(me->dataModbusSlave[REG_STA_FAULTS]) {
@@ -191,6 +205,10 @@ static HSM_EVENT app_state_fault_handler(HSM *This, HSM_EVENT event, void *param
         	HSM_Tran(This, &app_state_run, 0, NULL);
         	break;
         case HSME_BAT_RECEIVED_OK:
+        	/* Copy fresh CAN data to Modbus registers */
+        	for(uint16_t i = 0; i < TOTAL_BAT_REGISTERS; i++) {
+        		me->dataModbusSlave[i] = me->dataBattery[i];
+        	}
         	if(!me->dataModbusSlave[REG_STA_FAULTS]) {
         		HSM_Tran(This, &app_state_run, 0, NULL);
         	}
@@ -222,6 +240,10 @@ static HSM_EVENT app_state_bat_not_connected_handler(HSM *This, HSM_EVENT event,
         	HSM_Tran(This, &app_state_run, 0, NULL);
         	break;
         case HSME_BAT_RECEIVED_OK:
+        	/* Copy fresh CAN data to Modbus registers */
+        	for(uint16_t i = 0; i < TOTAL_BAT_REGISTERS; i++) {
+        		me->dataModbusSlave[i] = me->dataBattery[i];
+        	}
         	if(!me->dataModbusSlave[REG_STA_FAULTS]) {
         		HSM_Tran(This, &app_state_run, 0, NULL);
         	} else {

@@ -21,12 +21,12 @@ Mạch BSS V2 là bộ đọc và điều khiển Pin dùng trong trạm sạc/t
                                 CAN Bus (1 Mbps)
     +-------------+         CANH ──────────── CANH         +-------------+
     |             | ◄────── CANL ──────────── CANL ──────► |             |
-    |  Mạch BSS   |         GND ───────────── GND          |  Pack Pin   |
+    |  Mạch BSS   |                                         |  Pack Pin   |
     |  (Slave)    |                                         |  (BMS)      |
     |             |         RS485 Modbus RTU                +-------------+
     |             |          A ────────────── A
     |             | ◄──────► B ────────────── B ──────────► +-------------+
-    +-------------+         GND ───────────── GND           |  Master     |
+    +-------------+                                         |  Master     |
                                                             |  Controller |
                                                             +-------------+
 ```
@@ -35,7 +35,7 @@ Mạch BSS V2 là bộ đọc và điều khiển Pin dùng trong trạm sạc/t
 
 | Thông số | Giá trị |
 |----------|---------|
-| Nguồn cấp | 3.3V DC (hoặc 5V qua mạch ổn áp onboard) |
+| Nguồn cấp | Jack nguồn DC riêng (onboard) |
 | Vi xử lý | STM32F103C8T6 |
 | Giao tiếp Pin | CAN Bus 2.0A, 1 Mbps |
 | Giao tiếp Master | RS485 Half-duplex, Modbus RTU |
@@ -59,7 +59,6 @@ Mạch BSS V2 là bộ đọc và điều khiển Pin dùng trong trạm sạc/t
 |-----------|-------|
 | CANH | CAN High |
 | CANL | CAN Low |
-| GND | Mass chung |
 
 > **Yêu cầu:** Gắn điện trở termination **120 Ohm** giữa CANH và CANL ở **hai đầu bus**. Chiều dài bus tối đa ở 1 Mbps: khoảng 25m (dùng dây xoắn đôi có bọc chống nhiễu).
 
@@ -69,7 +68,6 @@ Mạch BSS V2 là bộ đọc và điều khiển Pin dùng trong trạm sạc/t
 |-----------|-------|
 | A | RS485 Data+ |
 | B | RS485 Data- |
-| GND | Mass chung |
 
 #### Cổng Limit Switch (phát hiện Pin trong slot)
 
@@ -115,27 +113,24 @@ DIP Switch 5 bit dùng để cài đặt **địa chỉ Modbus** và **baudrate 
 
 ### 3.1. Bước 1 — Kết nối nguồn
 
-Cấp nguồn 3.3V DC (hoặc 5V nếu board có mạch ổn áp) vào chân nguồn. Đảm bảo GND chung giữa mạch BSS, CAN transceiver và RS485 transceiver.
+Cắm nguồn DC vào jack nguồn riêng trên board. Board có mạch ổn áp onboard.
 
 ### 3.2. Bước 2 — Kết nối CAN Bus với Pack Pin
 
 1. Nối **CANH** của mạch BSS với **CANH** của Pack Pin (BMS)
 2. Nối **CANL** của mạch BSS với **CANL** của Pack Pin (BMS)
-3. Nối **GND** chung
-4. Gắn điện trở **120 Ohm** giữa CANH-CANL ở cả hai đầu bus
+3. Gắn điện trở **120 Ohm** giữa CANH-CANL ở cả hai đầu bus
 
 ```
 Mạch BSS                              Pack Pin (BMS)
   CANH ──── [120R] ──── dây ──── [120R] ──── CANH
   CANL ──────────────── dây ──────────────── CANL
-  GND  ──────────────── dây ──────────────── GND
 ```
 
 ### 3.3. Bước 3 — Kết nối RS485 với Master Controller
 
 1. Nối **A** của mạch BSS với **A** của Master Controller
 2. Nối **B** của mạch BSS với **B** của Master Controller
-3. Nối **GND** chung
 
 ### 3.4. Bước 4 — Kết nối Limit Switch
 
@@ -615,7 +610,7 @@ Thiết bị coi dữ liệu hợp lệ khi nhận đủ cả 18 frame. Nếu kh
 |-------------|------------|
 | Sai địa chỉ Modbus | Kiểm tra DIP Switch, đảm bảo khớp với cấu hình Master |
 | Sai baudrate | Cài lại baudrate (xem mục 4.2) |
-| Đứt dây RS485 | Kiểm tra kết nối A, B, GND |
+| Đứt dây RS485 | Kiểm tra kết nối A, B |
 | Đấu ngược A/B | Đổi chéo dây A và B |
 | Nhiều thiết bị cùng địa chỉ | Đảm bảo mỗi mạch BSS có địa chỉ duy nhất |
 
@@ -629,7 +624,7 @@ Thiết bị coi dữ liệu hợp lệ khi nhận đủ cả 18 frame. Nếu kh
 
 | Nguyên nhân | Cách xử lý |
 |-------------|------------|
-| Mất nguồn | Kiểm tra nguồn cấp 3.3V/5V |
+| Mất nguồn | Kiểm tra jack nguồn DC và nguồn cấp |
 | MCU bị treo | Nhấn nút Reset hoặc tắt/bật nguồn |
 | Firmware lỗi | Nạp lại firmware qua ST-Link |
 
