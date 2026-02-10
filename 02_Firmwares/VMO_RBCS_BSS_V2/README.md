@@ -1,580 +1,528 @@
-# VMO_RBCS_BSS_V2 - Battery Station Slave Firmware
+# HƯỚNG DẪN SỬ DỤNG - Mạch đọc Pin BSS V2
 
-Firmware cho mạch đọc dữ liệu Pin (BMS) và điều khiển trạm sạc/thay pin.
-MCU STM32F103C8T6, chạy FreeRTOS, giao tiếp CAN Bus với Pack Pin và Modbus RTU RS485 với Master Controller.
-
-## Mục lục
-
-- [Tổng quan hệ thống](#tổng-quan-hệ-thống)
-- [Yêu cầu phần cứng](#yêu-cầu-phần-cứng)
-- [Sơ đồ chân GPIO](#sơ-đồ-chân-gpio)
-- [Cài đặt môi trường phát triển](#cài-đặt-môi-trường-phát-triển)
-- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
-- [Cấu hình CAN Bus](#cấu-hình-can-bus)
-- [Cấu hình Modbus Slave RS485](#cấu-hình-modbus-slave-rs485)
-- [Hướng dẫn sử dụng thiết bị](#hướng-dẫn-sử-dụng-thiết-bị)
-- [Mô hình trạng thái HSM](#mô-hình-trạng-thái-hsm)
-- [Bảng thanh ghi dữ liệu](#bảng-thanh-ghi-dữ-liệu)
-- [Thư viện CAN Battery API](#thư-viện-can-battery-api)
-- [Xây dựng và nạp firmware](#xây-dựng-và-nạp-firmware)
-- [Xử lý sự cố](#xử-lý-sự-cố)
+**Tên sản phẩm:** VMO RBCS Battery Station Slave V2
+**Phiên bản firmware:** 2.0
+**Ngày cập nhật:** 10/02/2026
 
 ---
 
-## Tổng quan hệ thống
+## 1. Giới thiệu
 
-### Thông số kỹ thuật
+### 1.1. Mô tả sản phẩm
+
+Mạch BSS V2 là bộ đọc và điều khiển Pin dùng trong trạm sạc/thay pin tự động. Mạch thực hiện hai chức năng chính:
+
+- **Đọc dữ liệu Pack Pin** qua giao tiếp CAN Bus (1 Mbps) — tự động nhận toàn bộ thông tin từ BMS (trạng thái, điện áp, dòng điện, nhiệt độ, điện áp từng cell, SOC, SOH, v.v.)
+- **Cung cấp dữ liệu cho Master Controller** qua giao tiếp RS485 Modbus RTU — Master đọc dữ liệu Pin và gửi lệnh điều khiển (bật sạc, dừng khẩn cấp)
+
+### 1.2. Sơ đồ hệ thống
+
+```
+                                CAN Bus (1 Mbps)
+    +-------------+         CANH ──────────── CANH         +-------------+
+    |             | ◄────── CANL ──────────── CANL ──────► |             |
+    |  Mạch BSS   |         GND ───────────── GND          |  Pack Pin   |
+    |  (Slave)    |                                         |  (BMS)      |
+    |             |         RS485 Modbus RTU                +-------------+
+    |             |          A ────────────── A
+    |             | ◄──────► B ────────────── B ──────────► +-------------+
+    +-------------+         GND ───────────── GND           |  Master     |
+                                                            |  Controller |
+                                                            +-------------+
+```
+
+### 1.3. Thông số kỹ thuật
 
 | Thông số | Giá trị |
 |----------|---------|
-| MCU | STM32F103C8T6 (ARM Cortex-M3) |
-| Flash | 64 KB |
-| RAM | 20 KB |
-| Clock | 72 MHz (HSE 8MHz + PLL x9) |
-| RTOS | FreeRTOS V10 (CMSIS-RTOS V2) |
-| IDE | STM32CubeIDE |
-| HAL | STM32Cube FW_F1 V1.8.6 |
-
-### Kiến trúc giao tiếp
-
-```
-+-------------------+          CAN Bus 1Mbps           +------------------+
-|                   |  <------------------------------  |                  |
-|   BSS Slave       |    (Pack Pin broadcast data)      |    Pack Pin      |
-|   (STM32F103)     |                                   |    (BMS)         |
-|                   |                                   +------------------+
-|                   |
-|                   |        RS485 Modbus RTU            +------------------+
-|                   |  <------------------------------>  |                  |
-+-------------------+    (Slave, địa chỉ 1-31)          | Master Controller|
-                                                        +------------------+
-```
-
-**Luồng dữ liệu:**
-1. Pack Pin (BMS) tự động phát quảng bá dữ liệu qua CAN Bus
-2. BSS Slave nhận và lưu trữ dữ liệu Pin
-3. Master Controller đọc dữ liệu từ BSS Slave qua Modbus RTU RS485
-4. Master Controller gửi lệnh điều khiển (sạc, dừng khẩn cấp) qua Modbus
+| Nguồn cấp | 3.3V DC (hoặc 5V qua mạch ổn áp onboard) |
+| Vi xử lý | STM32F103C8T6 |
+| Giao tiếp Pin | CAN Bus 2.0A, 1 Mbps |
+| Giao tiếp Master | RS485 Half-duplex, Modbus RTU |
+| Baudrate RS485 | Cấu hình được (1200 - 115200 bps) |
+| Địa chỉ Modbus | Cấu hình được (1 - 31) |
+| Số thanh ghi Modbus | 52 thanh ghi 16-bit |
+| Cảm biến slot | 2x Limit Switch (phát hiện Pin) |
+| Ngõ ra điều khiển | 1x Điều khiển sạc, 1x Dừng khẩn cấp |
+| Chỉ thị | 3x LED (RUN, FAULT, STATUS) |
+| Kích thước | Theo thiết kế PCB |
 
 ---
 
-## Yêu cầu phần cứng
+## 2. Mô tả phần cứng
 
-### Linh kiện chính
-- 1x Board STM32F103C8T6 (Blue Pill hoặc PCB custom)
-- 1x Thạch anh 8MHz
-- 1x CAN Transceiver (MCP2551, TJA1050, hoặc SN65HVD230)
-- 1x RS485 Transceiver (MAX485, SP3485)
-- 1x DIP Switch 5 bit (đặt địa chỉ Modbus)
-- 2x Limit Switch (phát hiện Pin trong slot)
-- 3x LED (RUN, FAULT, STATUS)
-- Điện trở termination 120 Ohm cho CAN bus (2 đầu bus)
+### 2.1. Các cổng kết nối
 
-### Kết nối
+#### Cổng CAN Bus (kết nối Pack Pin)
 
-```
-CAN Bus:   PA11 (CAN_RX) ---|CAN        |--- CANH ---> Pack Pin BMS
-           PA12 (CAN_TX) ---|Transceiver |--- CANL --->
-                             |            |--- GND  --->
+| Tín hiệu | Mô tả |
+|-----------|-------|
+| CANH | CAN High |
+| CANL | CAN Low |
+| GND | Mass chung |
 
-RS485:     PA2 (USART2_TX) --|RS485      |--- A -----> Master Controller
-           PA3 (USART2_RX) --|Transceiver|--- B ----->
-           PA4 (TX Enable)  --|           |--- GND --->
-```
+> **Yêu cầu:** Gắn điện trở termination **120 Ohm** giữa CANH và CANL ở **hai đầu bus**. Chiều dài bus tối đa ở 1 Mbps: khoảng 25m (dùng dây xoắn đôi có bọc chống nhiễu).
 
----
+#### Cổng RS485 (kết nối Master Controller)
 
-## Sơ đồ chân GPIO
+| Tín hiệu | Mô tả |
+|-----------|-------|
+| A | RS485 Data+ |
+| B | RS485 Data- |
+| GND | Mass chung |
 
-### Giao tiếp
+#### Cổng Limit Switch (phát hiện Pin trong slot)
 
-| Chân | Tên | Chức năng | Hướng |
-|------|-----|-----------|-------|
-| PA2 | RS4851_DI | USART2 TX (RS485 COM) | Output AF |
-| PA3 | RS4851_RO | USART2 RX (RS485 COM) | Input |
-| PA4 | RS4851_TXEN | RS485 TX Enable | Output |
-| PA11 | CAN_RX | CAN nhận dữ liệu từ Pack | Input |
-| PA12 | CAN_TX | CAN phát dữ liệu | Output AF |
+| Đầu vào | Mô tả |
+|----------|-------|
+| LIMIT_SWITCH0 | Công tắc hành trình 1 — tích cực mức thấp (nối GND khi Pin có mặt) |
+| LIMIT_SWITCH1 | Công tắc hành trình 2 — tích cực mức thấp (nối GND khi Pin có mặt) |
 
-### Điều khiển
+Chỉ cần **một trong hai** công tắc kích hoạt là thiết bị nhận biết có Pin trong slot.
 
-| Chân | Tên | Chức năng | Hướng |
-|------|-----|-----------|-------|
-| PA8 | CHARGE_CTRL | Điều khiển sạc (HIGH = bật) | Output |
-| PA10 | EMERGENCY | Dừng khẩn cấp (HIGH = kích hoạt) | Output |
+#### Ngõ ra điều khiển
 
-### DIP Switch (địa chỉ Modbus)
+| Ngõ ra | Mô tả |
+|--------|-------|
+| CHARGE_CTRL | Điều khiển relay sạc. HIGH = bật sạc, LOW = tắt sạc |
+| EMERGENCY | Tín hiệu dừng khẩn cấp. HIGH = kích hoạt dừng khẩn, LOW = bình thường |
 
-| Chân | Tên | Bit | Ghi chú |
-|------|-----|-----|---------|
-| PB0 | ADDR4 | bit 0 | Pull-up, LOW = 1 |
-| PB1 | ADDR3 | bit 1 | Pull-up, LOW = 1 |
-| PB2 | ADDR2 | bit 2 | Pull-up, LOW = 1 |
-| PB3 | ADDR1 | bit 3 | Pull-up, LOW = 1 |
-| PB4 | ADDR0 | bit 4 | Pull-up, LOW = 1 |
+### 2.2. DIP Switch cấu hình (5 bit)
 
-Địa chỉ = 0 thì mặc định là 1. Dải địa chỉ: 1-31.
+DIP Switch 5 bit dùng để cài đặt **địa chỉ Modbus** và **baudrate RS485**.
 
-### LED chỉ thị
+| Công tắc | Nhãn | Ghi chú |
+|-----------|------|---------|
+| SW1 | ADDR4 | Bit 0 (LSB) |
+| SW2 | ADDR3 | Bit 1 |
+| SW3 | ADDR2 | Bit 2 |
+| SW4 | ADDR1 | Bit 3 |
+| SW5 | ADDR0 | Bit 4 (MSB) |
 
-| Chân | Tên | Chức năng |
-|------|-----|-----------|
-| PB5 | LED_STT | Nhấp nháy khi nhận dữ liệu từ Master |
-| PB6 | LED_RUN | Sáng khi hoạt động bình thường |
-| PB7 | LED_FAULT | Sáng khi có lỗi hoặc mất kết nối |
+**Logic đảo:** Công tắc gạt sang ON (nối GND) = bit 1. Công tắc ở OFF = bit 0.
 
-### Cảm biến
+### 2.3. Đèn LED chỉ thị
 
-| Chân | Tên | Chức năng |
-|------|-----|-----------|
-| PB8 | LIMIT_SWITCH0 | Phát hiện Pin trong slot |
-| PB9 | LIMIT_SWITCH1 | Phát hiện Pin trong slot |
-| PA6 | RD_VOLTAGE | Đọc điện áp (Analog) |
+| LED | Màu | Chức năng |
+|-----|------|-----------|
+| LED_RUN (PB6) | Xanh | Báo thiết bị đang hoạt động bình thường |
+| LED_FAULT (PB7) | Đỏ | Báo lỗi Pin hoặc mất kết nối CAN |
+| LED_STT (PB5) | Vàng | Nhấp nháy khi nhận được lệnh từ Master |
 
 ---
 
-## Cài đặt môi trường phát triển
+## 3. Lắp đặt
 
-### Yêu cầu
+### 3.1. Bước 1 — Kết nối nguồn
 
-1. **STM32CubeIDE** >= 1.15.0 (hoặc Keil/IAR với HAL)
-2. **ST-Link V2** hoặc **J-Link** để nạp firmware
-3. **STM32CubeMX** >= 6.15.0 (nếu muốn sửa cấu hình .ioc)
+Cấp nguồn 3.3V DC (hoặc 5V nếu board có mạch ổn áp) vào chân nguồn. Đảm bảo GND chung giữa mạch BSS, CAN transceiver và RS485 transceiver.
 
-### Các bước
+### 3.2. Bước 2 — Kết nối CAN Bus với Pack Pin
 
-```bash
-# 1. Clone repository
-git clone <repository-url>
-cd VMO_RBCS_V2/02_Firmwares/VMO_RBCS_BSS_V2
+1. Nối **CANH** của mạch BSS với **CANH** của Pack Pin (BMS)
+2. Nối **CANL** của mạch BSS với **CANL** của Pack Pin (BMS)
+3. Nối **GND** chung
+4. Gắn điện trở **120 Ohm** giữa CANH-CANL ở cả hai đầu bus
 
-# 2. Mở project trong STM32CubeIDE
-#    File -> Import -> Existing Projects into Workspace
-#    Chọn thư mục VMO_RBCS_BSS_V2
-
-# 3. Build
-#    Project -> Build Project (Ctrl+B)
-
-# 4. Nạp firmware
-#    Run -> Debug As -> STM32 C/C++ Application
 ```
+Mạch BSS                              Pack Pin (BMS)
+  CANH ──── [120R] ──── dây ──── [120R] ──── CANH
+  CANL ──────────────── dây ──────────────── CANL
+  GND  ──────────────── dây ──────────────── GND
+```
+
+### 3.3. Bước 3 — Kết nối RS485 với Master Controller
+
+1. Nối **A** của mạch BSS với **A** của Master Controller
+2. Nối **B** của mạch BSS với **B** của Master Controller
+3. Nối **GND** chung
+
+### 3.4. Bước 4 — Kết nối Limit Switch
+
+Nối Limit Switch giữa chân LIMIT_SWITCH0 (hoặc LIMIT_SWITCH1) và GND. Khi Pin được đặt vào slot, công tắc đóng lại (nối GND), thiết bị nhận biết có Pin.
+
+### 3.5. Bước 5 — Kết nối ngõ ra điều khiển
+
+- **CHARGE_CTRL** → Relay/MOSFET điều khiển mạch sạc
+- **EMERGENCY** → Mạch dừng khẩn cấp hệ thống
 
 ---
 
-## Cấu trúc thư mục
+## 4. Cấu hình thiết bị
 
-```
-VMO_RBCS_BSS_V2/
-|-- Core/
-|   |-- Inc/                    # Header files (main.h, can.h, usart.h, ...)
-|   |-- Src/                    # Source files
-|   |   |-- main.c              # Điểm vào, cấu hình clock, khởi tạo ngoại vi
-|   |   |-- can.c               # Khởi tạo CAN, bit timing, RX callback
-|   |   |-- usart.c             # Khởi tạo USART2 (RS485 Modbus Slave)
-|   |   |-- freertos.c          # Các task FreeRTOS (defaultTask, readBatteryTask, commTask)
-|   |   |-- gpio.c              # Khởi tạo GPIO
-|   |   |-- dma.c               # Khởi tạo DMA cho USART2
-|   |   |-- tim.c               # Khởi tạo Timer2 (HSM timer)
-|   |   |-- stm32f1xx_it.c      # Các hàm xử lý ngắt
-|   |   +-- ...
-|   +-- Startup/
-|
-|-- APP/                        # Ứng dụng chính
-|   |-- app_states.h            # Định nghĩa struct, enum, register map
-|   |-- app_states.c            # HSM state machine (run, fault, bat_not_connected)
-|   +-- app_params.c            # Khởi tạo EEPROM, cấu hình baudrate
-|
-|-- CAN-BAT/                    # Thư viện CAN Battery (MỚI)
-|   |-- can_battery.h           # Header - API, cấu hình CAN ID, struct
-|   +-- can_battery.c           # Implementation - init, filter, RX callback, truy xuất dữ liệu
-|
-|-- MODBUS-LIB/                 # Thư viện Modbus RTU (chỉ còn Slave)
-|   |-- Modbus.h / Modbus.c
-|   |-- ModbusConfig.h          # Cấu hình: MAX_M_HANDLERS=1 (chỉ Slave)
-|   +-- UARTCallback.c
-|
-|-- HSM/                        # Thư viện Hierarchical State Machine
-|-- EE/                         # Thư viện EEPROM emulation
-|-- Drivers/                    # STM32 HAL drivers
-|-- Middlewares/                 # FreeRTOS middleware
-|
-|-- RBCS_READ_BATTERY_DATA.ioc  # File project STM32CubeMX
-|-- STM32F103C8TX_FLASH.ld      # Linker script
-+-- README.md                   # File này
-```
+### 4.1. Cài đặt địa chỉ Modbus
 
----
+Mỗi mạch BSS trên bus RS485 cần có một **địa chỉ duy nhất** (1 - 31). Dùng DIP Switch 5 bit để đặt địa chỉ.
 
-## Cấu hình CAN Bus
+**Bảng tra địa chỉ (một số giá trị thường dùng):**
 
-### Thông số bit timing
+| Địa chỉ | SW1 | SW2 | SW3 | SW4 | SW5 |
+|----------|-----|-----|-----|-----|-----|
+| 1 | ON | OFF | OFF | OFF | OFF |
+| 2 | OFF | ON | OFF | OFF | OFF |
+| 3 | ON | ON | OFF | OFF | OFF |
+| 4 | OFF | OFF | ON | OFF | OFF |
+| 5 | ON | OFF | ON | OFF | OFF |
+| 10 | OFF | ON | OFF | ON | OFF |
+| 15 | ON | ON | ON | ON | OFF |
+| 16 | OFF | OFF | OFF | OFF | ON |
+| 20 | OFF | OFF | ON | OFF | ON |
+| 31 | ON | ON | ON | ON | ON |
 
-| Thông số | Giá trị | Ghi chú |
-|----------|---------|---------|
-| APB1 Clock | 36 MHz | SYSCLK/2 |
-| Prescaler | 2 | |
-| Time Quantum (TQ) | 55.56 ns | 36MHz / 2 = 18MHz |
-| Sync Seg | 1 TQ | Cố định |
-| BS1 (Time Seg 1) | 13 TQ | |
-| BS2 (Time Seg 2) | 4 TQ | |
-| SJW | 2 TQ | |
-| Tổng bit time | 18 TQ | 1 + 13 + 4 |
-| **Baud rate** | **1 Mbps** | 18MHz / 18 = 1MHz |
-| **Sample point** | **77.8%** | (1+13)/18 |
+> **Lưu ý:** Nếu tất cả công tắc ở OFF (địa chỉ = 0), thiết bị sẽ vào **chế độ cài đặt baudrate** thay vì hoạt động bình thường.
 
-### Các tham số khác
+### 4.2. Cài đặt Baudrate RS485
 
-| Thông số | Giá trị | Ý nghĩa |
-|----------|---------|---------|
-| Mode | Normal | Giao tiếp bình thường |
-| AutoBusOff | Enable | Tự phục hồi khi Bus-Off |
-| AutoWakeUp | Enable | Tự đánh thức |
-| AutoRetransmission | Enable | Tự gửi lại khi lỗi |
+Baudrate RS485 được lưu trong bộ nhớ EEPROM (không mất khi tắt nguồn). Mặc định khi xuất xưởng là **115200 bps**.
 
-### Bộ lọc CAN (Filter)
+**Quy trình cài đặt:**
 
-- **Filter Bank 0**, chế độ Mask 32-bit
-- Chấp nhận CAN ID: `0x100` - `0x10F`
-- Gán vào RX FIFO0
-- Ngắt `CAN_IT_RX_FIFO0_MSG_PENDING` được bật
+1. **Tắt nguồn** thiết bị
+2. **Gạt tất cả DIP Switch về OFF** (địa chỉ = 0)
+3. **Bật nguồn** — LED_RUN sẽ nhấp nháy mỗi 500ms, báo hiệu đang ở chế độ cài đặt
+4. **Gạt DIP Switch** đến mã baudrate mong muốn theo bảng dưới
+5. **Chờ 5 giây** — LED_RUN sáng liên tục, nghĩa là đã lưu thành công
+6. **Tắt nguồn**
+7. **Gạt DIP Switch về địa chỉ Modbus thực tế** (1 - 31)
+8. **Bật nguồn** — thiết bị hoạt động với baudrate mới
 
-### Giao thức CAN từ Pack Pin
+**Bảng mã baudrate:**
 
-BMS phát quảng bá dữ liệu qua 12 CAN frame. Mỗi frame chứa 4 thanh ghi 16-bit (big-endian):
-
-| CAN ID | Nội dung | Thanh ghi |
-|--------|----------|-----------|
-| 0x100 | Frame 0 | registers[0..3] |
-| 0x101 | Frame 1 | registers[4..7] |
-| 0x102 | Frame 2 | registers[8..11] |
-| ... | ... | ... |
-| 0x10B | Frame 11 | registers[44..47] |
-
-**Định dạng byte trong mỗi frame (8 bytes):**
-```
-Byte[0] = reg[N] >> 8     (high byte)
-Byte[1] = reg[N] & 0xFF   (low byte)
-Byte[2] = reg[N+1] >> 8
-Byte[3] = reg[N+1] & 0xFF
-Byte[4] = reg[N+2] >> 8
-Byte[5] = reg[N+2] & 0xFF
-Byte[6] = reg[N+3] >> 8
-Byte[7] = reg[N+3] & 0xFF
-```
-
-> **Lưu ý:** Nếu giao thức CAN của BMS khác (ví dụ DBC `VMO_SinglePack_DBC_V0_1`),
-> bạn cần sửa các `#define` trong `CAN-BAT/can_battery.h` và hàm parse trong
-> `CAN_BAT_RxCallback()` (file `CAN-BAT/can_battery.c`).
+| Mã (DIP Switch) | Baudrate | Mã (DIP Switch) | Baudrate |
+|------------------|----------|------------------|----------|
+| 1 | 1200 bps | 6 | 19200 bps |
+| 2 | 2400 bps | 7 | 38400 bps |
+| 3 | 4800 bps | 8 | 56000 bps |
+| 4 | 9600 bps | 9 | 57600 bps |
+| 5 | 14400 bps | **10** | **115200 bps (mặc định)** |
 
 ---
 
-## Cấu hình Modbus Slave RS485
+## 5. Vận hành
 
-### Thông số kết nối
+### 5.1. Khởi động
+
+1. Đảm bảo DIP Switch đã đặt đúng địa chỉ Modbus (1 - 31)
+2. Bật nguồn thiết bị
+3. **LED_RUN sáng liên tục** — thiết bị sẵn sàng hoạt động
+
+### 5.2. Hoạt động bình thường
+
+Khi có Pin được đặt vào slot:
+
+1. Limit Switch kích hoạt → thiết bị nhận biết **có Pin trong slot**
+2. Thiết bị **tự động nhận dữ liệu** từ Pack Pin qua CAN Bus
+3. Dữ liệu Pin được cập nhật liên tục vào bộ nhớ thanh ghi
+4. **Master Controller** đọc dữ liệu bất kỳ lúc nào qua Modbus RTU (Function Code 0x03)
+5. Master Controller có thể gửi lệnh điều khiển:
+
+| Lệnh | Thanh ghi | Giá trị | Tác dụng |
+|-------|-----------|---------|----------|
+| Bật sạc | 51 (CHRG_CTRL) | 1 | Kích hoạt ngõ ra CHARGE_CTRL |
+| Tắt sạc | 51 (CHRG_CTRL) | 0 | Ngắt ngõ ra CHARGE_CTRL |
+| Dừng khẩn cấp | 50 (EMERGENCY_STOP) | 1 | Kích hoạt ngõ ra EMERGENCY, ngắt sạc |
+| Hủy dừng khẩn cấp | 50 (EMERGENCY_STOP) | 0 | Tắt tín hiệu EMERGENCY |
+
+> **Lưu ý:** Khi lệnh dừng khẩn cấp đang hoạt động, lệnh bật sạc sẽ bị bỏ qua.
+
+### 5.3. Khi Pin được tháo ra
+
+Khi cả hai Limit Switch đều không kích hoạt:
+- Thiết bị nhận biết **slot trống**
+- Tất cả thanh ghi dữ liệu Pin được xóa về 0
+- Ngõ ra CHARGE_CTRL và EMERGENCY đều tắt
+- Thiết bị quay về trạng thái chờ Pin
+
+---
+
+## 6. Chỉ thị LED
+
+### 6.1. Bảng trạng thái LED
+
+| Trạng thái thiết bị | LED_RUN (Xanh) | LED_FAULT (Đỏ) | LED_STT (Vàng) |
+|----------------------|----------------|-----------------|-----------------|
+| Chế độ cài đặt baudrate | Nhấp nháy (500ms) | Tắt | Tắt |
+| Hoạt động bình thường | **Sáng liên tục** | Tắt | Nhấp nháy khi nhận lệnh Master |
+| Lỗi Pin (BMS fault) | Tắt | **Sáng liên tục** | Tắt |
+| Mất kết nối CAN | Tắt | **Nhấp nháy (500ms)** | Tắt |
+
+### 6.2. Ý nghĩa chi tiết
+
+- **LED_RUN sáng liên tục:** Thiết bị đang hoạt động bình thường, sẵn sàng đọc Pin và phục vụ Master.
+
+- **LED_RUN nhấp nháy:** Thiết bị đang ở chế độ cài đặt baudrate (DIP Switch = 0). Xem mục 4.2.
+
+- **LED_FAULT sáng liên tục:** Pack Pin đang báo lỗi (ví dụ: quá áp, quá dòng, quá nhiệt). Kiểm tra trạng thái Pin. Khi lỗi được khắc phục, LED tự tắt.
+
+- **LED_FAULT nhấp nháy:** Thiết bị không nhận được dữ liệu CAN từ Pack Pin sau 5 lần thử (mỗi lần 1 giây). Kiểm tra kết nối CAN Bus.
+
+- **LED_STT nhấp nháy ngắn:** Master Controller vừa đọc/ghi dữ liệu thành công.
+
+---
+
+## 7. Giao tiếp Modbus RTU
+
+### 7.1. Thông số giao tiếp
 
 | Thông số | Giá trị |
 |----------|---------|
-| UART | USART2 (PA2-TX, PA3-RX) |
-| TX Enable | PA4 (RS4851_TXEN) |
-| Địa chỉ Slave | Từ DIP Switch (1-31) |
-| Baudrate | Từ EEPROM (mặc định 115200) |
-| Data format | 8-N-1 |
 | Giao thức | Modbus RTU |
-| Chế độ | DMA |
-| Timeout | 1000 ms |
-| Số thanh ghi | 52 (TOTAL_STA_REGISTERS) |
+| Giao diện vật lý | RS485 Half-duplex |
+| Baudrate | Cấu hình được (mặc định 115200 bps) |
+| Data bits | 8 |
+| Parity | None |
+| Stop bits | 1 |
+| Địa chỉ Slave | Cấu hình được (1 - 31) |
 
-### Bảng mã Baudrate
+### 7.2. Function Code hỗ trợ
 
-Mã baudrate được lưu trong EEPROM, cài đặt qua DIP Switch:
+| Function Code | Tên | Mô tả |
+|---------------|-----|-------|
+| 0x03 | Read Holding Registers | Đọc thanh ghi dữ liệu |
+| 0x06 | Write Single Register | Ghi một thanh ghi điều khiển |
+| 0x10 | Write Multiple Registers | Ghi nhiều thanh ghi điều khiển |
 
-| Mã | Baudrate | Mã | Baudrate |
-|----|----------|----|----------|
-| 1 | 1200 | 6 | 19200 |
-| 2 | 2400 | 7 | 38400 |
-| 3 | 4800 | 8 | 56000 |
-| 4 | 9600 | 9 | 57600 |
-| 5 | 14400 | 10 | 115200 (mặc định) |
+### 7.3. Bảng thanh ghi (Register Map)
+
+#### Thanh ghi dữ liệu Pin (chỉ đọc, địa chỉ 0 - 47)
+
+| Địa chỉ | Tên | Mô tả | Đơn vị |
+|----------|-----|-------|--------|
+| 0 | BMS_STATE | Trạng thái BMS | — |
+| 1 | CTRL_REQUEST | Yêu cầu điều khiển | — |
+| 2 | CTRL_RESPONSE | Phản hồi điều khiển | — |
+| 3 | FET_CTRL_PIN | Trạng thái chân điều khiển FET | — |
+| 4 | FET_STATUS | Trạng thái FET (đóng/mở) | — |
+| 5 | ALARM_BITS | Bit cảnh báo | Bitmask |
+| 6 | FAULTS | Mã lỗi | Bitmask |
+| 7 | PACK_VOLT | Điện áp tổng Pack | mV |
+| 8 | STACK_VOLT | Điện áp Stack | mV |
+| 9 | PACK_CURRENT_H | Dòng điện Pack (byte cao) | mA |
+| 10 | PACK_CURRENT_L | Dòng điện Pack (byte thấp) | mA |
+| 11 | ID_VOLT | Điện áp nhận dạng | mV |
+| 12 | TEMP1_H | Nhiệt độ cảm biến 1 (byte cao) | 0.1°C |
+| 13 | TEMP1_L | Nhiệt độ cảm biến 1 (byte thấp) | 0.1°C |
+| 14 | TEMP2_H | Nhiệt độ cảm biến 2 (byte cao) | 0.1°C |
+| 15 | TEMP2_L | Nhiệt độ cảm biến 2 (byte thấp) | 0.1°C |
+| 16 | TEMP3_H | Nhiệt độ cảm biến 3 (byte cao) | 0.1°C |
+| 17 | TEMP3_L | Nhiệt độ cảm biến 3 (byte thấp) | 0.1°C |
+| 18 - 29 | CELL1 - CELL12 | Điện áp Cell 1 đến Cell 12 | mV |
+| 30 - 32 | (Dự phòng) | Không sử dụng | — |
+| 33 | CELL13 | Điện áp Cell 13 | mV |
+| 34 | SAFETY_A | Thanh ghi an toàn A | Bitmask |
+| 35 | SAFETY_B | Thanh ghi an toàn B | Bitmask |
+| 36 | SAFETY_C | Thanh ghi an toàn C | Bitmask |
+| 37 | ACCU_INT_H | Dung lượng tích lũy - nguyên (cao) | mAh |
+| 38 | ACCU_INT_L | Dung lượng tích lũy - nguyên (thấp) | mAh |
+| 39 | ACCU_FRAC_H | Dung lượng tích lũy - thập phân (cao) | — |
+| 40 | ACCU_FRAC_L | Dung lượng tích lũy - thập phân (thấp) | — |
+| 41 | ACCU_TIME_H | Thời gian tích lũy (cao) | giây |
+| 42 | ACCU_TIME_L | Thời gian tích lũy (thấp) | giây |
+| 43 | PIN_PERCENT | Phần trăm Pin | % |
+| 44 | PERCENT_TARGET | Phần trăm mục tiêu sạc | % |
+| 45 | CELL_RESISTANCE | Điện trở nội Cell | mOhm |
+| 46 | SOC | State of Charge | % |
+| 47 | SOH | State of Health | % |
+
+#### Thanh ghi trạng thái Station (chỉ đọc, địa chỉ 48 - 49)
+
+| Địa chỉ | Tên | Mô tả | Giá trị |
+|----------|-----|-------|---------|
+| 48 | IS_PIN_IN_SLOT | Trạng thái slot | 0 = Trống, 1 = Có Pin |
+| 49 | IS_PIN_TIMEOUT | Trạng thái kết nối CAN | 0 = Bình thường, 1 = Mất kết nối |
+
+#### Thanh ghi điều khiển (đọc/ghi, địa chỉ 50 - 51)
+
+| Địa chỉ | Tên | Mô tả | Giá trị |
+|----------|-----|-------|---------|
+| 50 | IS_EMERGENCY_STOP | Lệnh dừng khẩn cấp | 0 = Bình thường, 1 = Dừng khẩn cấp |
+| 51 | CHRG_CTRL | Lệnh điều khiển sạc | 0 = Tắt sạc, 1 = Bật sạc |
+
+### 7.4. Ví dụ giao tiếp
+
+**Đọc toàn bộ dữ liệu Pin (48 thanh ghi, bắt đầu từ địa chỉ 0):**
+
+```
+Master gửi:  [Addr] [03] [00 00] [00 30] [CRC16]
+                │     │     │        │
+                │     │     │        └─ Số thanh ghi: 48 (0x0030)
+                │     │     └────────── Địa chỉ bắt đầu: 0
+                │     └──────────────── Function Code: Read Holding Registers
+                └────────────────────── Địa chỉ Slave (1-31)
+```
+
+**Bật sạc (ghi thanh ghi 51 = 1):**
+
+```
+Master gửi:  [Addr] [06] [00 33] [00 01] [CRC16]
+                │     │     │        │
+                │     │     │        └─ Giá trị: 1 (bật sạc)
+                │     │     └────────── Địa chỉ thanh ghi: 51 (0x0033)
+                │     └──────────────── Function Code: Write Single Register
+                └────────────────────── Địa chỉ Slave
+```
+
+**Dừng khẩn cấp (ghi thanh ghi 50 = 1):**
+
+```
+Master gửi:  [Addr] [06] [00 32] [00 01] [CRC16]
+```
+
+**Đọc trạng thái slot và timeout (2 thanh ghi từ địa chỉ 48):**
+
+```
+Master gửi:  [Addr] [03] [00 30] [00 02] [CRC16]
+```
 
 ---
 
-## Hướng dẫn sử dụng thiết bị
+## 8. Giao tiếp CAN Bus
 
-### 1. Kết nối phần cứng
+### 8.1. Thông số CAN
 
-1. Cấp nguồn cho board (3.3V hoặc 5V tùy thiết kế PCB)
-2. Kết nối CAN transceiver:
-   - PA11 -> CAN_RX của transceiver
-   - PA12 -> CAN_TX của transceiver
-   - CANH, CANL -> Bus CAN của Pack Pin
-   - Gắn điện trở 120 Ohm ở hai đầu bus CAN
-3. Kết nối RS485 transceiver:
-   - PA2 -> DI (Data In)
-   - PA3 -> RO (Receiver Out)
-   - PA4 -> DE/RE (Direction Enable)
-   - A, B -> Bus RS485 của Master Controller
-4. Kết nối Limit Switch vào PB8, PB9 (nối GND khi kích hoạt)
-5. Kết nối DIP Switch 5 bit vào PB0-PB4
+| Thông số | Giá trị |
+|----------|---------|
+| Chuẩn | CAN 2.0A (Standard ID 11-bit) |
+| Tốc độ | 1 Mbps |
+| Sample point | 77.8% |
+| Chiều dài bus tối đa | ~25m (dây xoắn đôi có bọc) |
 
-### 2. Cài đặt địa chỉ Modbus
+### 8.2. Định dạng dữ liệu từ Pack Pin
 
-Dùng DIP Switch 5 bit (ADDR4..ADDR0) để đặt địa chỉ:
+Pack Pin (BMS) phát quảng bá dữ liệu qua **12 CAN frame**, mỗi frame chứa **4 thanh ghi 16-bit** theo thứ tự big-endian:
+
+| CAN ID | Thanh ghi | Nội dung |
+|--------|-----------|----------|
+| 0x100 | 0 - 3 | BMS State, Control Request/Response, FET Control |
+| 0x101 | 4 - 7 | FET Status, Alarm, Faults, Pack Voltage |
+| 0x102 | 8 - 11 | Stack Voltage, Pack Current (H/L), ID Voltage |
+| 0x103 | 12 - 15 | Temperature 1 (H/L), Temperature 2 (H/L) |
+| 0x104 | 16 - 19 | Temperature 3 (H/L), Cell 1, Cell 2 |
+| 0x105 | 20 - 23 | Cell 3, Cell 4, Cell 5, Cell 6 |
+| 0x106 | 24 - 27 | Cell 7, Cell 8, Cell 9, Cell 10 |
+| 0x107 | 28 - 31 | Cell 11, Cell 12, (Dự phòng) x2 |
+| 0x108 | 32 - 35 | (Dự phòng), Cell 13, Safety A, Safety B |
+| 0x109 | 36 - 39 | Safety C, Accumulator Integer (H/L), Accumulator Frac H |
+| 0x10A | 40 - 43 | Accumulator Frac L, Accumulator Time (H/L), Pin Percent |
+| 0x10B | 44 - 47 | Percent Target, Cell Resistance, SOC, SOH |
+
+**Cấu trúc mỗi frame (8 bytes):**
 
 ```
-Ví dụ: Địa chỉ = 5
-  ADDR4 (PB0) = OFF  (bit0 = 1)
-  ADDR3 (PB1) = ON   (bit1 = 0)
-  ADDR2 (PB2) = OFF  (bit2 = 1)
-  ADDR1 (PB3) = OFF  (bit3 = 0)
-  ADDR0 (PB4) = OFF  (bit4 = 0)
-  -> addr = 0b00101 = 5
+Byte 0-1: Thanh ghi thứ 1 (High byte, Low byte)
+Byte 2-3: Thanh ghi thứ 2 (High byte, Low byte)
+Byte 4-5: Thanh ghi thứ 3 (High byte, Low byte)
+Byte 6-7: Thanh ghi thứ 4 (High byte, Low byte)
 ```
 
-**Lưu ý:** Logic đảo - công tắc BẬT (nối GND) = bit 1.
-
-### 3. Cài đặt Baudrate (lần đầu)
-
-1. Đặt tất cả DIP Switch về `OFF` (địa chỉ = 0) -> vào chế độ cài đặt
-2. LED_RUN sẽ nhấp nháy (500ms)
-3. Gạt DIP Switch đến giá trị baudrate mong muốn (1-10)
-4. Giữ nguyên 5 giây, LED_RUN sáng liên -> đã lưu vào EEPROM
-5. Reset thiết bị
-6. Đặt lại DIP Switch về địa chỉ Modbus thực tế
-
-### 4. Hoạt động bình thường
-
-Sau khi khởi động với địa chỉ hợp lệ (1-31):
-
-1. **LED_RUN sáng liên** -> Thiết bị hoạt động bình thường
-2. Khi Pin được đặt vào slot -> Limit Switch kích hoạt
-3. Thiết bị tự động nhận dữ liệu từ Pack Pin qua CAN Bus
-4. Master Controller đọc dữ liệu qua Modbus RTU (Function Code 0x03)
-5. **LED_STT nhấp nháy nhanh** -> Đang giao tiếp với Master
-6. Master có thể gửi lệnh:
-   - `REG_STA_CHRG_CTRL = 1` -> Bật sạc
-   - `REG_STA_IS_EMERGENCY_STOP = 1` -> Dừng khẩn cấp
-
-### 5. Chỉ thị LED
-
-| Trạng thái | LED_RUN | LED_FAULT | LED_STT |
-|------------|---------|-----------|---------|
-| Cài đặt baudrate | Nhấp nháy 500ms | Tắt | Tắt |
-| Bình thường | Sáng | Tắt | Nhấp nháy khi nhận lệnh |
-| Lỗi BMS | Tắt | Sáng | Tắt |
-| Mất kết nối Pin | Tắt | Nhấp nháy 500ms | Tắt |
+Thiết bị coi dữ liệu hợp lệ khi nhận đủ cả 12 frame. Nếu không nhận được dữ liệu trong **1 giây**, tính là một lần timeout. Sau **5 lần timeout liên tiếp**, thiết bị chuyển sang trạng thái mất kết nối.
 
 ---
 
-## Mô hình trạng thái HSM
+## 9. Các trạng thái hoạt động
 
 ```
-                +--------------------+
-                | Cài đặt Baudrate   |  (địa chỉ = 0)
-                +--------------------+
-                         |
-                   địa chỉ != 0
-                         v
-                  +-------------+
-           +----->|    Chạy     |<------+
-           |      +-------------+       |
-           |         |       |          |
-           |    có FAULT  timeout>=5    |
-           |         v       v          |
-           |   +-------+ +----------+  |
-           +---|  Lỗi  | | Mất kết  |--+
-           |   +-------+ | nối Pin  |  |
-           |      ^      +----------+  |
-           |      |          |         |
-           |      +----------+         |
-           |       có FAULT            |
-           +---------------------------+
-              Limit Switch tắt hoặc
-              nhận OK + không lỗi
+                ┌────────────────────────┐
+                │   Cài đặt Baudrate     │ ← DIP Switch = 0
+                │   (LED_RUN nhấp nháy)  │
+                └────────────────────────┘
+                            │
+                     DIP Switch ≠ 0
+                            ▼
+                ┌────────────────────────┐
+        ┌──────►│   Hoạt động bình       │◄──────┐
+        │       │   thường               │       │
+        │       │   (LED_RUN sáng)       │       │
+        │       └───────┬────────┬───────┘       │
+        │               │        │               │
+        │          BMS lỗi   Mất CAN ≥5s         │
+        │               ▼        ▼               │
+        │       ┌──────────┐ ┌──────────────┐    │
+        │       │ Lỗi Pin  │ │  Mất kết nối │    │
+        ├───────│(LED_FAULT│ │  (LED_FAULT  │────┤
+        │       │ sáng)    │ │  nhấp nháy)  │    │
+        │       └────┬─────┘ └───────┬──────┘    │
+        │            │               │           │
+        │            └───BMS lỗi─────┘           │
+        │                                        │
+        └── Tháo Pin / Hết lỗi ──────────────────┘
 ```
 
-### Chi tiết chuyển trạng thái
-
-| Từ | Đến | Điều kiện |
-|----|-----|-----------|
-| Chạy | Lỗi | Nhận dữ liệu OK nhưng có FAULT |
-| Chạy | Mất kết nối | CAN timeout >= 5 lần liên tiếp |
-| Lỗi | Chạy | Limit Switch tắt HOẶC nhận OK + không FAULT |
-| Mất kết nối | Chạy | Limit Switch tắt HOẶC nhận OK + không FAULT |
-| Mất kết nối | Lỗi | Nhận OK nhưng có FAULT |
+| Trạng thái | Điều kiện vào | Điều kiện thoát |
+|------------|---------------|-----------------|
+| **Hoạt động bình thường** | Khởi động với địa chỉ hợp lệ | Phát hiện lỗi BMS hoặc mất kết nối CAN |
+| **Lỗi Pin** | Nhận dữ liệu Pin có cờ FAULT | Pin được tháo ra, hoặc nhận lại dữ liệu không có lỗi |
+| **Mất kết nối** | Không nhận CAN sau 5 lần timeout | Pin được tháo ra, hoặc nhận lại dữ liệu thành công |
 
 ---
 
-## Bảng thanh ghi dữ liệu
+## 10. Xử lý sự cố
 
-### Thanh ghi Pin (Battery Registers) - Đọc từ CAN
+### LED_FAULT sáng liên tục
 
-48 thanh ghi 16-bit, thứ tự trong `dataBattery[]`:
+| Nguyên nhân | Cách xử lý |
+|-------------|------------|
+| Pack Pin báo lỗi (quá áp, quá dòng, quá nhiệt, ...) | Tháo Pin, kiểm tra tình trạng Pin. Lắp lại hoặc thay Pin khác. |
+| BMS gặp sự cố nội bộ | Đọc thanh ghi FAULTS (địa chỉ 6) để xác định loại lỗi. |
 
-| Chỉ số | Tên | Mô tả |
-|--------|-----|-------|
-| 0 | BMS_STATE | Trạng thái BMS |
-| 1 | CTRL_REQUEST | Yêu cầu điều khiển |
-| 2 | CTRL_RESPONSE | Phản hồi điều khiển |
-| 3 | FET_CTRL_PIN | Chân điều khiển FET |
-| 4 | FET_STATUS | Trạng thái FET |
-| 5 | ALARM_BITS | Bit cảnh báo |
-| 6 | FAULTS | Mã lỗi |
-| 7 | PACK_VOLT | Điện áp Pack |
-| 8 | STACK_VOLT | Điện áp Stack |
-| 9-10 | PACK_CURRENT | Dòng điện Pack (High/Low) |
-| 11 | ID_VOLT | Điện áp nhận dạng |
-| 12-17 | TEMP1/2/3 | Nhiệt độ 3 cảm biến (High/Low) |
-| 18-29 | CELL1-CELL12 | Điện áp Cell 1-12 |
-| 30-32 | CELL_NONE | Dự phòng |
-| 33 | CELL13 | Điện áp Cell 13 |
-| 34-36 | SAFETY_A/B/C | Thanh ghi an toàn |
-| 37-38 | ACCU_INT | Tích lũy (nguyên) H/L |
-| 39-40 | ACCU_FRAC | Tích lũy (thập phân) H/L |
-| 41-42 | ACCU_TIME | Thời gian tích lũy H/L |
-| 43 | PIN_PERCENT | Phần trăm Pin |
-| 44 | PERCENT_TARGET | Phần trăm mục tiêu |
-| 45 | CELL_RESISTANCE | Điện trở Cell |
-| 46 | SOC_PERCENT | SOC (%) |
-| 47 | SOH_VALUE | SOH (%) |
+### LED_FAULT nhấp nháy
 
-### Thanh ghi Station (Modbus Slave Registers) - Master đọc/ghi
+| Nguyên nhân | Cách xử lý |
+|-------------|------------|
+| Đứt dây CAN (CANH hoặc CANL) | Kiểm tra và nối lại dây CAN |
+| Thiếu điện trở termination 120 Ohm | Gắn điện trở 120 Ohm ở hai đầu bus |
+| CAN transceiver mất nguồn | Kiểm tra nguồn cấp cho CAN transceiver |
+| Pack Pin không hoạt động | Kiểm tra Pin có đang bật và phát CAN không |
+| Sai tốc độ CAN | Đảm bảo cả hai đầu đều cấu hình 1 Mbps |
+| Bus CAN quá dài | Rút ngắn bus (tối đa ~25m ở 1 Mbps) |
 
-52 thanh ghi, bao gồm toàn bộ thanh ghi Pin + 4 thanh ghi bổ sung:
+### Master không đọc được dữ liệu
 
-| Chỉ số | Tên | Mô tả | Đọc/Ghi |
-|--------|-----|-------|---------|
-| 0-47 | (như trên) | Dữ liệu Pin copy từ CAN | Đọc |
-| 48 | IS_PIN_IN_SLOT | Pin trong slot (0=Trống, 1=Đầy) | Đọc |
-| 49 | IS_PIN_TIMEOUT | CAN timeout (0=OK, 1=Timeout) | Đọc |
-| 50 | IS_EMERGENCY_STOP | Lệnh dừng khẩn cấp | Ghi |
-| 51 | CHRG_CTRL | Lệnh điều khiển sạc | Ghi |
+| Nguyên nhân | Cách xử lý |
+|-------------|------------|
+| Sai địa chỉ Modbus | Kiểm tra DIP Switch, đảm bảo khớp với cấu hình Master |
+| Sai baudrate | Cài lại baudrate (xem mục 4.2) |
+| Đứt dây RS485 | Kiểm tra kết nối A, B, GND |
+| Đấu ngược A/B | Đổi chéo dây A và B |
+| Nhiều thiết bị cùng địa chỉ | Đảm bảo mỗi mạch BSS có địa chỉ duy nhất |
 
----
+### LED_RUN không sáng, chỉ nhấp nháy
 
-## Thư viện CAN Battery API
+| Nguyên nhân | Cách xử lý |
+|-------------|------------|
+| DIP Switch đang ở vị trí = 0 | Đặt DIP Switch về địa chỉ mong muốn (1-31), rồi reset thiết bị |
 
-File: `CAN-BAT/can_battery.h` và `CAN-BAT/can_battery.c`
+### Thiết bị không phản hồi gì (không LED nào sáng)
 
-### Cấu hình (sửa trong can_battery.h)
-
-```c
-#define CAN_BAT_BASE_ID         0x100   // CAN ID đầu tiên của BMS
-#define CAN_BAT_FRAME_COUNT     12      // Số frame CAN (48 regs / 4 per frame)
-#define CAN_BAT_REGS_PER_FRAME  4       // Số thanh ghi 16-bit mỗi frame
-#define CAN_BAT_TX_CMD_ID       0x200   // CAN ID gửi lệnh đến BMS
-#define CAN_BAT_TIMEOUT_MS      1000    // Timeout (ms)
-```
-
-### Các hàm API
-
-```c
-// Khởi tạo driver: cấu hình filter, start CAN, bật ngắt
-CAN_BAT_Status_t CAN_BAT_Init(CAN_BAT_Handle_t *handle, CAN_HandleTypeDef *hcan);
-
-// Kiểm tra timeout
-uint8_t CAN_BAT_IsTimeout(CAN_BAT_Handle_t *handle);
-
-// Kiểm tra đã nhận đủ dữ liệu chưa
-uint8_t CAN_BAT_IsDataReady(CAN_BAT_Handle_t *handle);
-
-// Copy dữ liệu Pin ra buffer (thread-safe)
-CAN_BAT_Status_t CAN_BAT_GetData(CAN_BAT_Handle_t *handle, uint16_t *dest, uint16_t count);
-
-// Gửi lệnh đến BMS (tối đa 8 byte)
-CAN_BAT_Status_t CAN_BAT_SendCommand(CAN_BAT_Handle_t *handle, uint8_t *data, uint8_t len);
-
-// Đặt task nhận notification khi dữ liệu sẵn sàng
-void CAN_BAT_SetNotifyTask(CAN_BAT_Handle_t *handle, TaskHandle_t taskHandle);
-
-// Gọi từ HAL_CAN_RxFifo0MsgPendingCallback (đã được gọi từ can.c)
-void CAN_BAT_RxCallback(CAN_BAT_Handle_t *handle);
-```
-
-### Cách hoạt động
-
-1. **`CAN_BAT_Init()`** cấu hình filter CAN, bật CAN, bật ngắt RX FIFO0
-2. Khi CAN frame đến -> **ISR** gọi `CAN_BAT_RxCallback()` tự động
-3. Callback phân tích CAN ID, lưu 4 thanh ghi 16-bit vào buffer
-4. Khi nhận đủ 12 frame -> đặt cờ `dataReady` và notify task đang chờ
-5. **`StartReadBatteryTask`** nhận notification, gọi `CAN_BAT_GetData()` để copy dữ liệu
-6. Dữ liệu được chuyển vào `dataBattery[]` -> copy sang `dataModbusSlave[]` khi Master đọc
+| Nguyên nhân | Cách xử lý |
+|-------------|------------|
+| Mất nguồn | Kiểm tra nguồn cấp 3.3V/5V |
+| MCU bị treo | Nhấn nút Reset hoặc tắt/bật nguồn |
+| Firmware lỗi | Nạp lại firmware qua ST-Link |
 
 ---
 
-## Xây dựng và nạp firmware
+## 11. Thông tin bảo trì
 
-### Build với STM32CubeIDE
-
-1. Mở project trong STM32CubeIDE
-2. Chọn Build Configuration: **Debug** hoặc **Release**
-3. `Project -> Build Project` (Ctrl+B)
-4. Kiểm tra output: `Debug/RBCS_READ_BATTERY_DATA.elf`
-
-### Nạp firmware
-
-**Qua ST-Link:**
-```
-Run -> Debug As -> STM32 C/C++ Application
-```
-
-**Qua command line (dùng STM32CubeProgrammer):**
-```bash
-STM32_Programmer_CLI -c port=SWD -w Debug/RBCS_READ_BATTERY_DATA.elf -v -rst
-```
-
-### Sửa cấu hình CubeMX
-
-Nếu muốn thay đổi cấu hình ngoại vi:
-1. Mở file `RBCS_READ_BATTERY_DATA.ioc` bằng STM32CubeMX
-2. Sửa cấu hình
-3. Generate Code
-4. **Lưu ý:** Code trong vùng `USER CODE BEGIN/END` sẽ được giữ lại
+- **Không** có linh kiện nào cần thay thế định kỳ
+- **Không** mở nắp thiết bị khi đang cấp nguồn
+- Bảo quản ở nơi khô ráo, tránh ẩm ướt và bụi bẩn
+- Nhiệt độ hoạt động: -20°C đến +70°C
+- Kiểm tra kết nối dây CAN và RS485 định kỳ, đảm bảo không bị oxy hóa hoặc lỏng
 
 ---
 
-## Xử lý sự cố
+## Phụ lục A — Thông số CAN Bus chi tiết
 
-### LED_FAULT sáng liên (trạng thái Lỗi)
-
-- **Nguyên nhân:** BMS báo lỗi (thanh ghi FAULTS != 0)
-- **Xử lý:** Kiểm tra trạng thái Pin, tháo Pin ra và lắp lại. Nếu lỗi vẫn còn, kiểm tra BMS.
-
-### LED_FAULT nhấp nháy (trạng thái Mất kết nối)
-
-- **Nguyên nhân:** Không nhận được dữ liệu CAN từ Pack Pin trong 5 giây (5 x 1s timeout)
-- **Xử lý:**
-  1. Kiểm tra kết nối CAN (CANH, CANL, GND)
-  2. Kiểm tra điện trở termination 120 Ohm
-  3. Kiểm tra CAN transceiver có nguồn chưa
-  4. Kiểm tra Pack Pin có hoạt động (có phát CAN) không
-  5. Kiểm tra baud rate CAN phải khớp (1 Mbps)
-
-### Master không đọc được dữ liệu Modbus
-
-- **Xử lý:**
-  1. Kiểm tra địa chỉ DIP Switch (phải khớp với cấu hình Master)
-  2. Kiểm tra baudrate (xem mục "Cài đặt Baudrate")
-  3. Kiểm tra kết nối RS485 (A, B, GND)
-  4. Kiểm tra TX Enable (PA4)
-
-### LED_RUN không sáng khi khởi động
-
-- **Nguyên nhân:** DIP Switch đặt địa chỉ = 0 -> vào chế độ cài đặt baudrate
-- **Xử lý:** LED_RUN sẽ nhấp nháy. Đặt DIP Switch về địa chỉ mong muốn (1-31), đợi 5 giây, reset thiết bị.
-
-### Không nhận được CAN dù đã kết nối đúng
-
-- Kiểm tra sample point và baud rate phải khớp giữa 2 node
-- Hiện tại cấu hình: **1 Mbps, sample point 77.8%**
-- Chiều dài bus CAN tối đa ở 1 Mbps: khoảng **25m** (dây twisted pair có shield)
-- Nếu bus dài hơn, giảm baud rate (sửa Prescaler trong CubeMX)
-
----
-
-## Tham khảo
-
-- DBC file: `04_Documents/CANdb/VMO_SinglePack_DBC_V0_1.dbc`
-- Flowchart chi tiết: `VMO_RBCS_BSS_V2_Flowchart.md`
-- STM32F103 Reference Manual: RM0008
-- STM32 HAL CAN documentation
-- Modbus RTU specification
+| Thông số | Giá trị |
+|----------|---------|
+| Baud rate | 1,000,000 bps |
+| Sample point | 77.8% |
+| Prescaler | 2 |
+| Time Segment 1 (BS1) | 13 TQ |
+| Time Segment 2 (BS2) | 4 TQ |
+| Sync Jump Width (SJW) | 2 TQ |
+| Auto Bus-Off Recovery | Có |
+| Auto Retransmission | Có |
+| CAN ID nhận (RX) | 0x100 - 0x10B |
+| CAN ID gửi (TX) | 0x200 |
