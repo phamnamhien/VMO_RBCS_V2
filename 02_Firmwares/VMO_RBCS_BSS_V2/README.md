@@ -41,7 +41,7 @@ Mạch BSS V2 là bộ đọc và điều khiển Pin dùng trong trạm sạc/t
 | Giao tiếp Master | RS485 Half-duplex, Modbus RTU |
 | Baudrate RS485 | Cấu hình được (1200 - 115200 bps) |
 | Địa chỉ Modbus | Cấu hình được (1 - 31) |
-| Số thanh ghi Modbus | 52 thanh ghi 16-bit |
+| Số thanh ghi Modbus | 76 thanh ghi 16-bit |
 | Cảm biến slot | 2x Limit Switch (phát hiện Pin) |
 | Ngõ ra điều khiển | 1x Điều khiển sạc, 1x Dừng khẩn cấp |
 | Chỉ thị | 3x LED (RUN, FAULT, STATUS) |
@@ -218,10 +218,10 @@ Khi có Pin được đặt vào slot:
 
 | Lệnh | Thanh ghi | Giá trị | Tác dụng |
 |-------|-----------|---------|----------|
-| Bật sạc | 51 (CHRG_CTRL) | 1 | Kích hoạt ngõ ra CHARGE_CTRL |
-| Tắt sạc | 51 (CHRG_CTRL) | 0 | Ngắt ngõ ra CHARGE_CTRL |
-| Dừng khẩn cấp | 50 (EMERGENCY_STOP) | 1 | Kích hoạt ngõ ra EMERGENCY, ngắt sạc |
-| Hủy dừng khẩn cấp | 50 (EMERGENCY_STOP) | 0 | Tắt tín hiệu EMERGENCY |
+| Bật sạc | 75 (CHRG_CTRL) | 1 | Kích hoạt ngõ ra CHARGE_CTRL |
+| Tắt sạc | 75 (CHRG_CTRL) | 0 | Ngắt ngõ ra CHARGE_CTRL |
+| Dừng khẩn cấp | 74 (EMERGENCY_STOP) | 1 | Kích hoạt ngõ ra EMERGENCY, ngắt sạc |
+| Hủy dừng khẩn cấp | 74 (EMERGENCY_STOP) | 0 | Tắt tín hiệu EMERGENCY |
 
 > **Lưu ý:** Khi lệnh dừng khẩn cấp đang hoạt động, lệnh bật sạc sẽ bị bỏ qua.
 
@@ -284,94 +284,79 @@ Khi cả hai Limit Switch đều không kích hoạt:
 
 ### 7.3. Bảng thanh ghi (Register Map)
 
-#### Thanh ghi dữ liệu Pin (chỉ đọc, địa chỉ 0 - 47)
+Dữ liệu từ 18 CAN message được lưu dạng raw 16-bit big-endian (4 thanh ghi / frame).
 
-| Địa chỉ | Tên | Mô tả | Đơn vị |
-|----------|-----|-------|--------|
-| 0 | BMS_STATE | Trạng thái BMS | — |
-| 1 | CTRL_REQUEST | Yêu cầu điều khiển | — |
-| 2 | CTRL_RESPONSE | Phản hồi điều khiển | — |
-| 3 | FET_CTRL_PIN | Trạng thái chân điều khiển FET | — |
-| 4 | FET_STATUS | Trạng thái FET (đóng/mở) | — |
-| 5 | ALARM_BITS | Bit cảnh báo | Bitmask |
-| 6 | FAULTS | Mã lỗi | Bitmask |
-| 7 | PACK_VOLT | Điện áp tổng Pack | mV |
-| 8 | STACK_VOLT | Điện áp Stack | mV |
-| 9 | PACK_CURRENT_H | Dòng điện Pack (byte cao) | mA |
-| 10 | PACK_CURRENT_L | Dòng điện Pack (byte thấp) | mA |
-| 11 | ID_VOLT | Điện áp nhận dạng | mV |
-| 12 | TEMP1_H | Nhiệt độ cảm biến 1 (byte cao) | 0.1°C |
-| 13 | TEMP1_L | Nhiệt độ cảm biến 1 (byte thấp) | 0.1°C |
-| 14 | TEMP2_H | Nhiệt độ cảm biến 2 (byte cao) | 0.1°C |
-| 15 | TEMP2_L | Nhiệt độ cảm biến 2 (byte thấp) | 0.1°C |
-| 16 | TEMP3_H | Nhiệt độ cảm biến 3 (byte cao) | 0.1°C |
-| 17 | TEMP3_L | Nhiệt độ cảm biến 3 (byte thấp) | 0.1°C |
-| 18 - 29 | CELL1 - CELL12 | Điện áp Cell 1 đến Cell 12 | mV |
-| 30 - 32 | (Dự phòng) | Không sử dụng | — |
-| 33 | CELL13 | Điện áp Cell 13 | mV |
-| 34 | SAFETY_A | Thanh ghi an toàn A | Bitmask |
-| 35 | SAFETY_B | Thanh ghi an toàn B | Bitmask |
-| 36 | SAFETY_C | Thanh ghi an toàn C | Bitmask |
-| 37 | ACCU_INT_H | Dung lượng tích lũy - nguyên (cao) | mAh |
-| 38 | ACCU_INT_L | Dung lượng tích lũy - nguyên (thấp) | mAh |
-| 39 | ACCU_FRAC_H | Dung lượng tích lũy - thập phân (cao) | — |
-| 40 | ACCU_FRAC_L | Dung lượng tích lũy - thập phân (thấp) | — |
-| 41 | ACCU_TIME_H | Thời gian tích lũy (cao) | giây |
-| 42 | ACCU_TIME_L | Thời gian tích lũy (thấp) | giây |
-| 43 | PIN_PERCENT | Phần trăm Pin | % |
-| 44 | PERCENT_TARGET | Phần trăm mục tiêu sạc | % |
-| 45 | CELL_RESISTANCE | Điện trở nội Cell | mOhm |
-| 46 | SOC | State of Charge | % |
-| 47 | SOH | State of Health | % |
+#### Thanh ghi dữ liệu Pin (chỉ đọc, địa chỉ 0 - 71)
 
-#### Thanh ghi trạng thái Station (chỉ đọc, địa chỉ 48 - 49)
+| Địa chỉ | CAN ID | Tên CAN Message | Nội dung thanh ghi |
+|----------|--------|-----------------|-------------------|
+| 0-3 | 0x300 | PACK_ControlSystem | MaxChgCurrent, MaxDsgCurrent, MaxChgPower, MaxDsgPower |
+| 4-7 | 0x301 | PACK_InfoCharging | VoltageLimit, CurrentLimit, ChargingStatus, ChargingDiag |
+| 8-11 | 0x303 | PACK_InfoBms | BmsStatus, CurrentDir+DiagTop, Reserved, WakeupSource |
+| 12-15 | 0x304 | PACK_InfoCellBalancing | CB01-04, CB05-08, CB09-12, CB13 |
+| 16-19 | 0x306 | PACK_InfoDemCell | DemVoltage, DemCurrent, DemTemp, DemImbalance |
+| 20-23 | 0x309 | PACK_InfoPack | FET Status, PackVoltageBAT, PackCurrentAvg, PackCurrent |
+| 24-27 | 0x30A | PACK_InfoSox | Capacity, RSOC+SOH, CycleCount, RemainingChgTime |
+| 28-31 | 0x30B | PACK_AccumDsgChgCapacity | AccumCharge(H), AccumCharge(L), AccumDischarge(H), AccumDischarge(L) |
+| 32-35 | 0x30E | PACK_InfoContactor | AdcBattVolt, AdcPackVolt, AdcFuseVolt, ChargeTime |
+| 36-39 | 0x310 | PACK_InfoVoltageCell | VCellAvg, VCellMin, VCellMinNo, VCellMax |
+| 40-43 | 0x311 | PACK_InfoVoltageCell1 | Cell01, Cell02, Cell03, Cell04 |
+| 44-47 | 0x312 | PACK_InfoVoltageCell2 | Cell05, Cell06, Cell07, Cell08 |
+| 48-51 | 0x313 | PACK_InfoVoltageCell3 | Cell09, Cell10, Cell11, Cell12 |
+| 52-55 | 0x314 | PACK_InfoVoltageCell4 | Cell13, (Reserved x3) |
+| 56-59 | 0x315 | PACK_InfoDemBMS | DemBMS_0, DemBMS_1, (Reserved x2) |
+| 60-63 | 0x320 | PACK_InfoTemperatureCell | TempCellAvg+Min, TempMinNo+Max, TempMaxNo, (Reserved) |
+| 64-67 | 0x322 | PACK_InfoTemperatureCB | TempCB1+CB2, TempFET, (Reserved x2) |
+| 68-71 | 0x32F | PACK_InfoPackVersion | SW Version, BL Version, MfgDate, OtpBq |
+
+#### Thanh ghi trạng thái Station (chỉ đọc, địa chỉ 72 - 73)
 
 | Địa chỉ | Tên | Mô tả | Giá trị |
 |----------|-----|-------|---------|
-| 48 | IS_PIN_IN_SLOT | Trạng thái slot | 0 = Trống, 1 = Có Pin |
-| 49 | IS_PIN_TIMEOUT | Trạng thái kết nối CAN | 0 = Bình thường, 1 = Mất kết nối |
+| 72 | IS_PIN_IN_SLOT | Trạng thái slot | 0 = Trống, 1 = Có Pin |
+| 73 | IS_PIN_TIMEOUT | Trạng thái kết nối CAN | 0 = Bình thường, 1 = Mất kết nối |
 
-#### Thanh ghi điều khiển (đọc/ghi, địa chỉ 50 - 51)
+#### Thanh ghi điều khiển (đọc/ghi, địa chỉ 74 - 75)
 
 | Địa chỉ | Tên | Mô tả | Giá trị |
 |----------|-----|-------|---------|
-| 50 | IS_EMERGENCY_STOP | Lệnh dừng khẩn cấp | 0 = Bình thường, 1 = Dừng khẩn cấp |
-| 51 | CHRG_CTRL | Lệnh điều khiển sạc | 0 = Tắt sạc, 1 = Bật sạc |
+| 74 | IS_EMERGENCY_STOP | Lệnh dừng khẩn cấp | 0 = Bình thường, 1 = Dừng khẩn cấp |
+| 75 | CHRG_CTRL | Lệnh điều khiển sạc | 0 = Tắt sạc, 1 = Bật sạc |
 
 ### 7.4. Ví dụ giao tiếp
 
-**Đọc toàn bộ dữ liệu Pin (48 thanh ghi, bắt đầu từ địa chỉ 0):**
+**Đọc toàn bộ dữ liệu Pin (72 thanh ghi, bắt đầu từ địa chỉ 0):**
 
 ```
-Master gửi:  [Addr] [03] [00 00] [00 30] [CRC16]
+Master gửi:  [Addr] [03] [00 00] [00 48] [CRC16]
                 │     │     │        │
-                │     │     │        └─ Số thanh ghi: 48 (0x0030)
+                │     │     │        └─ Số thanh ghi: 72 (0x0048)
                 │     │     └────────── Địa chỉ bắt đầu: 0
                 │     └──────────────── Function Code: Read Holding Registers
                 └────────────────────── Địa chỉ Slave (1-31)
 ```
 
-**Bật sạc (ghi thanh ghi 51 = 1):**
+**Bật sạc (ghi thanh ghi 75 = 1):**
 
 ```
-Master gửi:  [Addr] [06] [00 33] [00 01] [CRC16]
+Master gửi:  [Addr] [06] [00 4B] [00 01] [CRC16]
                 │     │     │        │
                 │     │     │        └─ Giá trị: 1 (bật sạc)
-                │     │     └────────── Địa chỉ thanh ghi: 51 (0x0033)
+                │     │     └────────── Địa chỉ thanh ghi: 75 (0x004B)
                 │     └──────────────── Function Code: Write Single Register
                 └────────────────────── Địa chỉ Slave
 ```
 
-**Dừng khẩn cấp (ghi thanh ghi 50 = 1):**
+**Dừng khẩn cấp (ghi thanh ghi 74 = 1):**
 
 ```
-Master gửi:  [Addr] [06] [00 32] [00 01] [CRC16]
+Master gửi:  [Addr] [06] [00 4A] [00 01] [CRC16]
 ```
 
-**Đọc trạng thái slot và timeout (2 thanh ghi từ địa chỉ 48):**
+**Đọc trạng thái slot và timeout (2 thanh ghi từ địa chỉ 72):**
 
 ```
-Master gửi:  [Addr] [03] [00 30] [00 02] [CRC16]
+Master gửi:  [Addr] [03] [00 48] [00 02] [CRC16]
 ```
 
 ---
@@ -389,22 +374,28 @@ Master gửi:  [Addr] [03] [00 30] [00 02] [CRC16]
 
 ### 8.2. Định dạng dữ liệu từ Pack Pin
 
-Pack Pin (BMS) phát quảng bá dữ liệu qua **12 CAN frame**, mỗi frame chứa **4 thanh ghi 16-bit** theo thứ tự big-endian:
+Pack Pin (BMS) phát quảng bá dữ liệu qua **18 CAN message** (theo DBC VMO_SinglePack_DBC_V0_1), mỗi frame chứa **4 thanh ghi 16-bit** theo thứ tự big-endian:
 
-| CAN ID | Thanh ghi | Nội dung |
-|--------|-----------|----------|
-| 0x100 | 0 - 3 | BMS State, Control Request/Response, FET Control |
-| 0x101 | 4 - 7 | FET Status, Alarm, Faults, Pack Voltage |
-| 0x102 | 8 - 11 | Stack Voltage, Pack Current (H/L), ID Voltage |
-| 0x103 | 12 - 15 | Temperature 1 (H/L), Temperature 2 (H/L) |
-| 0x104 | 16 - 19 | Temperature 3 (H/L), Cell 1, Cell 2 |
-| 0x105 | 20 - 23 | Cell 3, Cell 4, Cell 5, Cell 6 |
-| 0x106 | 24 - 27 | Cell 7, Cell 8, Cell 9, Cell 10 |
-| 0x107 | 28 - 31 | Cell 11, Cell 12, (Dự phòng) x2 |
-| 0x108 | 32 - 35 | (Dự phòng), Cell 13, Safety A, Safety B |
-| 0x109 | 36 - 39 | Safety C, Accumulator Integer (H/L), Accumulator Frac H |
-| 0x10A | 40 - 43 | Accumulator Frac L, Accumulator Time (H/L), Pin Percent |
-| 0x10B | 44 - 47 | Percent Target, Cell Resistance, SOC, SOH |
+| CAN ID | Thanh ghi | Tên Message | Nội dung |
+|--------|-----------|-------------|----------|
+| 0x300 | 0-3 | PACK_ControlSystem | Dòng & công suất sạc/xả tối đa |
+| 0x301 | 4-7 | PACK_InfoCharging | Giới hạn V/I sạc, trạng thái sạc |
+| 0x303 | 8-11 | PACK_InfoBms | Khẩn cấp, chế độ BMS, rolling counter |
+| 0x304 | 12-15 | PACK_InfoCellBalancing | Trạng thái cân bằng cell 1-13 |
+| 0x306 | 16-19 | PACK_InfoDemCell | Chẩn đoán cell (quá áp, dòng, nhiệt) |
+| 0x309 | 20-23 | PACK_InfoPack | Trạng thái FET, điện áp & dòng pack |
+| 0x30A | 24-27 | PACK_InfoSox | SOC, SOH, số chu kỳ, thời gian sạc còn lại |
+| 0x30B | 28-31 | PACK_AccumDsgChgCapacity | Dung lượng sạc/xả tích lũy (32-bit) |
+| 0x30E | 32-35 | PACK_InfoContactor | Điện áp ADC (batt, pack, cầu chì), thời gian sạc |
+| 0x310 | 36-39 | PACK_InfoVoltageCell | Điện áp cell TB/Min/Max |
+| 0x311 | 40-43 | PACK_InfoVoltageCell1 | Điện áp Cell 1-4 |
+| 0x312 | 44-47 | PACK_InfoVoltageCell2 | Điện áp Cell 5-8 |
+| 0x313 | 48-51 | PACK_InfoVoltageCell3 | Điện áp Cell 9-12 |
+| 0x314 | 52-55 | PACK_InfoVoltageCell4 | Điện áp Cell 13 (DLC=2) |
+| 0x315 | 56-59 | PACK_InfoDemBMS | Chẩn đoán BMS (FET, ASIC, cầu chì) |
+| 0x320 | 60-63 | PACK_InfoTemperatureCell | Nhiệt độ cell TB/Min/Max |
+| 0x322 | 64-67 | PACK_InfoTemperatureCB | Nhiệt độ FET & CB |
+| 0x32F | 68-71 | PACK_InfoPackVersion | Phiên bản SW/HW, ngày sản xuất |
 
 **Cấu trúc mỗi frame (8 bytes):**
 
@@ -415,7 +406,9 @@ Byte 4-5: Thanh ghi thứ 3 (High byte, Low byte)
 Byte 6-7: Thanh ghi thứ 4 (High byte, Low byte)
 ```
 
-Thiết bị coi dữ liệu hợp lệ khi nhận đủ cả 12 frame. Nếu không nhận được dữ liệu trong **1 giây**, tính là một lần timeout. Sau **5 lần timeout liên tiếp**, thiết bị chuyển sang trạng thái mất kết nối.
+> **Lưu ý:** Một số frame có DLC < 8 (VoltageCell4: 2 bytes, DemBMS: 4 bytes). Các thanh ghi ngoài DLC sẽ giữ giá trị 0.
+
+Thiết bị coi dữ liệu hợp lệ khi nhận đủ cả 18 frame. Nếu không nhận được dữ liệu trong **1 giây**, tính là một lần timeout. Sau **5 lần timeout liên tiếp**, thiết bị chuyển sang trạng thái mất kết nối.
 
 ---
 
@@ -463,7 +456,7 @@ Thiết bị coi dữ liệu hợp lệ khi nhận đủ cả 12 frame. Nếu kh
 | Nguyên nhân | Cách xử lý |
 |-------------|------------|
 | Pack Pin báo lỗi (quá áp, quá dòng, quá nhiệt, ...) | Tháo Pin, kiểm tra tình trạng Pin. Lắp lại hoặc thay Pin khác. |
-| BMS gặp sự cố nội bộ | Đọc thanh ghi FAULTS (địa chỉ 6) để xác định loại lỗi. |
+| BMS gặp sự cố nội bộ | Đọc thanh ghi DEM_CELL_VOLTAGE (địa chỉ 16) và DEM_BMS_0 (địa chỉ 56) để xác định loại lỗi. |
 
 ### LED_FAULT nhấp nháy
 
@@ -524,5 +517,5 @@ Thiết bị coi dữ liệu hợp lệ khi nhận đủ cả 12 frame. Nếu kh
 | Sync Jump Width (SJW) | 2 TQ |
 | Auto Bus-Off Recovery | Có |
 | Auto Retransmission | Có |
-| CAN ID nhận (RX) | 0x100 - 0x10B |
+| CAN ID nhận (RX) | 0x300 - 0x32F (18 message, xem bảng 8.2) |
 | CAN ID gửi (TX) | 0x200 |

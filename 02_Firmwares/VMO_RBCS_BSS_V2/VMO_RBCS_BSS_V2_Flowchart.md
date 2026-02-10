@@ -362,7 +362,7 @@ graph LR
 | Chân TX Enable    | PA4 (RS4851_TXEN)               |
 | Địa chỉ Slave     | Từ DIP Switch (1-31)            |
 | Baudrate          | Từ EEPROM (1200-115200)         |
-| Số lượng thanh ghi | 50 (TOTAL_STA_REGISTERS)        |
+| Số lượng thanh ghi | 76 (TOTAL_STA_REGISTERS)        |
 | Timeout           | 1000ms                          |
 | Chế độ            | DMA                             |
 
@@ -559,16 +559,17 @@ Dữ liệu từ CAN messages sẽ được phân tích và lưu vào cấu trú
 | pack_versionManufacturerDate | 16 bit | 1 | - | MFG_DATE |
 | pack_OtpBq | 16 bit | 1 | - | OTP_BQ |
 
-### 10b. Thanh ghi Station (Cung cấp cho Master Controller) - GIỮ NGUYÊN CẤU TRÚC
+### 10b. Thanh ghi Station (Cung cấp cho Master Controller)
 
-Bao gồm dữ liệu đã phân tích từ CAN + 4 thanh ghi bổ sung:
+Bao gồm 72 thanh ghi dữ liệu CAN (0-71) + 4 thanh ghi station (72-75):
 
-| Chỉ số | Tên                  | Mô tả                            |
-|--------|----------------------|----------------------------------|
-| 46     | IS_PIN_IN_SLOT       | Pin trong slot (0=TRỐNG, 1=ĐẦY) |
-| 47     | IS_PIN_TIMEOUT       | Timeout CAN (0/1)                |
-| 48     | IS_EMERGENCY_STOP    | Lệnh dừng khẩn cấp (từ Master)  |
-| 49     | CHRG_CTRL            | Lệnh điều khiển sạc (từ Master)  |
+| Chỉ số | Tên                  | Loại      | Mô tả                            |
+|--------|----------------------|-----------|----------------------------------|
+| 0-71   | (Dữ liệu CAN)       | Chỉ đọc   | 18 frame × 4 registers (xem 10a) |
+| 72     | IS_PIN_IN_SLOT       | Chỉ đọc   | Pin trong slot (0=TRỐNG, 1=ĐẦY) |
+| 73     | IS_PIN_TIMEOUT       | Chỉ đọc   | Timeout CAN (0=Bình thường, 1=Mất kết nối) |
+| 74     | IS_EMERGENCY_STOP    | Đọc/Ghi   | Lệnh dừng khẩn cấp (từ Master, 0=Bình thường, 1=Dừng) |
+| 75     | CHRG_CTRL            | Đọc/Ghi   | Lệnh điều khiển sạc (từ Master, 0=Tắt, 1=Bật) |
 
 ---
 
