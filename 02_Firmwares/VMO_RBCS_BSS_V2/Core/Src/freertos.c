@@ -26,8 +26,10 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usart.h"
+#include "can.h"
 #include "semphr.h"
 #include "app_states.h"
+#include "can_battery.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,6 +50,7 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 DeviceHSM_t device;
+CAN_BAT_Handle_t canBatHandle;  /* Global handle accessed by CAN RX ISR */
 
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
@@ -168,7 +171,6 @@ void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
   /* Infinite loop */
-	/* Master initialization */
 	osSemaphoreAcquire(binsemaModbusMasterHandle, 0);
 	osSemaphoreAcquire(binsemaModbusSlaveHandle, 0);
 
@@ -192,18 +194,13 @@ void StartDefaultTask(void *argument)
 		}
 	} else {
 
-		/* Master initialization */
-		device.handlerModbusMaster.uModbusType = MB_MASTER;
-		device.handlerModbusMaster.port =  &MB_BAT_UART;
-		device.handlerModbusMaster.u8id = 0; // For master it must be 0
-		device.handlerModbusMaster.u16timeOut = 1000;
-		device.handlerModbusMaster.EN_Port = MB_BAT_PORT;
-		device.handlerModbusMaster.EN_Pin = MB_BAT_PIN;
-		device.handlerModbusMaster.u16regs = device.dataModbusMaster;
-		device.handlerModbusMaster.u16regsize= sizeof(device.dataModbusMaster)/sizeof(device.dataModbusMaster[0]);
-		device.handlerModbusMaster.xTypeHW = USART_HW_DMA;
+		/* CAN Battery initialization (replaces Modbus Master) */
+		if (CAN_BAT_Init(&canBatHandle, &hcan) != CAN_BAT_OK) {
+			Error_Handler();
+		}
+		device.canBatHandle = canBatHandle;
 
-		/* Slave initialization */
+		/* Modbus Slave initialization (RS485 comm with external master) */
 		UART_ReconfigureByCode(&MB_COM_UART, device.storage.baudrate);
 		device.handlerModbusSlave.uModbusType = MB_SLAVE;
 		device.handlerModbusSlave.port =  &MB_COM_UART;
@@ -213,12 +210,7 @@ void StartDefaultTask(void *argument)
 		device.handlerModbusSlave.EN_Pin = MB_COM_PIN;
 		device.handlerModbusSlave.u16regs = device.dataModbusSlave;
 		device.handlerModbusSlave.u16regsize= sizeof(device.dataModbusSlave)/sizeof(device.dataModbusSlave[0]);
-
-		//Initialize Modbus library
 		device.handlerModbusSlave.xTypeHW = USART_HW_DMA;
-
-		ModbusInit(&device.handlerModbusMaster);
-		ModbusStart(&device.handlerModbusMaster);
 
 		ModbusInit(&device.handlerModbusSlave);
 		ModbusStart(&device.handlerModbusSlave);
@@ -254,32 +246,33 @@ void StartReadBatteryTask(void *argument)
 {
   /* USER CODE BEGIN StartReadBatteryTask */
   /* Infinite loop */
-  uint32_t u32NotificationValue;
   static uint16_t timeout_count = 0;
   osSemaphoreAcquire(binsemaModbusMasterHandle, osWaitForever);
 
-  device.telegramMaster[TELE_MASTER_READ_FULL_BAT_DATA].u8id = 0x10; // slave address
-  device.telegramMaster[TELE_MASTER_READ_FULL_BAT_DATA].u8fct = 0x03; // function code (this one is registers read)
-  device.telegramMaster[TELE_MASTER_READ_FULL_BAT_DATA].u16RegAdd = 0x00; // start address in slave
-  device.telegramMaster[TELE_MASTER_READ_FULL_BAT_DATA].u16CoilsNo = TOTAL_BAT_REGISTERS; // number of elements (coils or registers) to read
-  device.telegramMaster[TELE_MASTER_READ_FULL_BAT_DATA].u16reg = device.dataModbusMaster; // pointer to a memory array
+  /* Register this task for CAN RX notification */
+  CAN_BAT_SetNotifyTask(&canBatHandle, xTaskGetCurrentTaskHandle());
+
   for(;;)
   {
 	if(device.dataModbusSlave[REG_STA_IS_PIN_IN_SLOT] == SLOT_FULL) {
-		ModbusQuery(&device.handlerModbusMaster, device.telegramMaster[TELE_MASTER_READ_FULL_BAT_DATA]);
-		u32NotificationValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		if(u32NotificationValue != OP_OK_QUERY) {
+		/* Wait for CAN data notification (with timeout) */
+		uint32_t notifyValue = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CAN_BAT_TIMEOUT_MS));
+
+		if (notifyValue > 0 && CAN_BAT_IsDataReady(&canBatHandle)) {
+			/* Got complete battery data via CAN */
+			CAN_BAT_GetData(&canBatHandle, device.dataBattery, TOTAL_BAT_REGISTERS);
 			timeout_count = 0;
 			HSM_Run((HSM *)&device, HSME_BAT_RECEIVED_OK, 0);
 		} else {
+			/* Timeout or incomplete data */
 			if(++timeout_count >= 5) {
 				timeout_count = 5;
 				HSM_Run((HSM *)&device, HSME_BAT_RECEIVED_TIMEOUT, 0);
 			}
 		}
+	} else {
+		osDelay(100);
 	}
-
-    osDelay(100);
   }
   /* USER CODE END StartReadBatteryTask */
 }

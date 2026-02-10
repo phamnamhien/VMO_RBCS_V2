@@ -14,16 +14,13 @@
 #include "hsm.h"
 #include "ee.h"
 #include "Modbus.h"
+#include "can_battery.h"
 
 
 #define MB_COM_UART	huart2
-#define MB_BAT_UART	huart3
-
 
 #define MB_COM_PORT	RS4851_TXEN_GPIO_Port
 #define MB_COM_PIN	RS4851_TXEN_Pin
-#define MB_BAT_PORT	RS4852_TXEN_GPIO_Port
-#define MB_BAT_PIN	RS4852_TXEN_Pin
 
 #define SETTING_WAIT_DONE_MS		5000
 #define LED_STATUS_ON_MS			100
@@ -187,11 +184,6 @@ typedef enum {
 
 	TOTAL_STA_REGISTERS,
 } StationRegister_t;
-typedef enum {
-	TELE_MASTER_READ_FULL_BAT_DATA = 0,
-	TOTAL_TELE_MASTER,
-} TelegramMaster_t;
-
 typedef struct {
 	uint8_t baudrate;
 	uint16_t magic;
@@ -202,14 +194,13 @@ typedef struct {
 
 	uint8_t modbus_address;
 
-	modbusHandler_t handlerModbusMaster;
-	uint16_t dataModbusMaster[TOTAL_BAT_REGISTERS];
-	modbus_t telegramMaster[TOTAL_TELE_MASTER];
+	/* CAN Battery - replaces Modbus Master */
+	CAN_BAT_Handle_t canBatHandle;
+	uint16_t dataBattery[TOTAL_BAT_REGISTERS];
 
-
+	/* Modbus Slave (RS485 communication with external master) */
 	modbusHandler_t handlerModbusSlave;
 	uint16_t dataModbusSlave[TOTAL_STA_REGISTERS];
-
 
 	Storage_t storage;
 } DeviceHSM_t;

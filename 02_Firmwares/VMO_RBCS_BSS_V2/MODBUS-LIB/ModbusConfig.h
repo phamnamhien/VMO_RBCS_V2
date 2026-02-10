@@ -26,8 +26,8 @@
 #define T35  5              // Timer T35 period (in ticks) for end frame detection.
 #define MAX_BUFFER  128	    // Maximum size for the communication buffer in bytes.
 #define TIMEOUT_MODBUS 1000 // Timeout for master query (in ticks)
-#define MAX_M_HANDLERS 2    //Maximum number of modbus handlers that can work concurrently
-#define MAX_TELEGRAMS 2     //Max number of Telegrams in master queue
+#define MAX_M_HANDLERS 1    //Only Modbus Slave now (Master replaced by CAN)
+#define MAX_TELEGRAMS 1     //Max number of Telegrams in queue
 
 #if ENABLE_TCP == 1
 #define NUMBERTCPCONN   4   // Maximum number of simultaneous client connections, it should be equal or less than LWIP configuration
