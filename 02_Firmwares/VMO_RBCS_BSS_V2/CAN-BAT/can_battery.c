@@ -9,8 +9,34 @@
 #include <string.h>
 
 
-/* All-frames-received mask: bits 0..11 = 0x0FFF */
-#define CAN_BAT_ALL_FRAMES_MASK  ((1U << CAN_BAT_FRAME_COUNT) - 1U)
+/* All-frames-received mask: bits 0..17 = 0x3FFFF */
+#define CAN_BAT_ALL_FRAMES_MASK  ((1UL << CAN_BAT_FRAME_COUNT) - 1UL)
+
+/* Lookup: CAN ID -> frame index (0-17), or 0xFF if invalid */
+static uint8_t CAN_BAT_GetFrameIndex(uint32_t canId)
+{
+    switch (canId) {
+        case 0x300: return CAN_BAT_FRM_CONTROL_SYS;
+        case 0x301: return CAN_BAT_FRM_CHARGING;
+        case 0x303: return CAN_BAT_FRM_BMS;
+        case 0x304: return CAN_BAT_FRM_CELL_BALANCING;
+        case 0x306: return CAN_BAT_FRM_DEM_CELL;
+        case 0x309: return CAN_BAT_FRM_PACK;
+        case 0x30A: return CAN_BAT_FRM_SOX;
+        case 0x30B: return CAN_BAT_FRM_ACCUM;
+        case 0x30E: return CAN_BAT_FRM_CONTACTOR;
+        case 0x310: return CAN_BAT_FRM_VCELL_INFO;
+        case 0x311: return CAN_BAT_FRM_VCELL1;
+        case 0x312: return CAN_BAT_FRM_VCELL2;
+        case 0x313: return CAN_BAT_FRM_VCELL3;
+        case 0x314: return CAN_BAT_FRM_VCELL4;
+        case 0x315: return CAN_BAT_FRM_DEM_BMS;
+        case 0x320: return CAN_BAT_FRM_TEMP_CELL;
+        case 0x322: return CAN_BAT_FRM_TEMP_CB;
+        case 0x32F: return CAN_BAT_FRM_VERSION;
+        default:    return 0xFF;
+    }
+}
 
 
 CAN_BAT_Status_t CAN_BAT_Init(CAN_BAT_Handle_t *handle, CAN_HandleTypeDef *hcan)
@@ -28,11 +54,11 @@ CAN_BAT_Status_t CAN_BAT_Init(CAN_BAT_Handle_t *handle, CAN_HandleTypeDef *hcan)
     memset((void *)handle->rxData, 0, sizeof(handle->rxData));
 
     /* ---- Configure CAN Filter ----
-     * Accept CAN IDs from CAN_BAT_BASE_ID to CAN_BAT_BASE_ID + CAN_BAT_FRAME_COUNT - 1
-     * Using 16-bit scale, ID List mode for precise matching is complex for 12 IDs.
-     * Instead, use 32-bit Mask mode:
-     *   - ID:   0x100 (base)
-     *   - Mask: 0x7F0 (accept 0x100 - 0x10F, which covers our 0x100-0x10B)
+     * Accept CAN IDs from 0x300 to 0x33F (covers all DBC IDs: 0x300-0x32F)
+     * 32-bit Mask mode:
+     *   - ID:   0x300
+     *   - Mask: 0x7C0 (bits[10:6] must match, accepts 0x300-0x33F)
+     * Invalid IDs within this range are filtered in RxCallback via lookup table
      */
     CAN_FilterTypeDef filter;
     filter.FilterBank = 0;
@@ -45,8 +71,8 @@ CAN_BAT_Status_t CAN_BAT_Init(CAN_BAT_Handle_t *handle, CAN_HandleTypeDef *hcan)
      */
     filter.FilterIdHigh = (CAN_BAT_BASE_ID << 5);
     filter.FilterIdLow = 0x0000;
-    /* Mask: 0x7F0 means bits[10:4] must match = 0x10x, accepts 0x100-0x10F */
-    filter.FilterMaskIdHigh = (0x7F0U << 5);
+    /* Mask: 0x7C0 means bits[10:6] must match = 0b0110000xxxx, accepts 0x300-0x33F */
+    filter.FilterMaskIdHigh = (0x7C0U << 5);
     filter.FilterMaskIdLow = 0x0006;  /* IDE=0 (Std), RTR=0 (Data) must match */
     filter.FilterFIFOAssignment = CAN_RX_FIFO0;
     filter.FilterActivation = ENABLE;
@@ -161,10 +187,10 @@ void CAN_BAT_RxCallback(CAN_BAT_Handle_t *handle)
         return;
     }
 
-    /* Calculate frame index from CAN ID */
-    uint32_t frameIndex = rxHeader.StdId - CAN_BAT_BASE_ID;
+    /* Calculate frame index from CAN ID via lookup table */
+    uint8_t frameIndex = CAN_BAT_GetFrameIndex(rxHeader.StdId);
     if (frameIndex >= CAN_BAT_FRAME_COUNT) {
-        return;  /* Out of range, ignore */
+        return;  /* Unknown CAN ID, ignore */
     }
 
     /* Parse 4 x 16-bit registers from 8-byte payload (big-endian) */
@@ -179,7 +205,7 @@ void CAN_BAT_RxCallback(CAN_BAT_Handle_t *handle)
     }
 
     /* Update frame received bitmask */
-    handle->rxFrameMask |= (1U << frameIndex);
+    handle->rxFrameMask |= (1UL << frameIndex);
     handle->lastRxTick = xTaskGetTickCountFromISR();
 
     /* Check if all frames received */

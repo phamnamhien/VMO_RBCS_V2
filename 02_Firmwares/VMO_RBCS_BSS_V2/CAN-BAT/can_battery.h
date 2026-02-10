@@ -5,13 +5,12 @@
  *  Description: CAN Bus Battery Pack Communication Driver
  *               Replaces Modbus RTU over RS485 for reading BMS data
  *
- *  CAN Protocol:
+ *  CAN Protocol (VMO_SinglePack_DBC_V0_1):
  *    - Baud rate: 1 Mbps
- *    - BMS broadcasts data in multiple CAN frames
- *    - Base RX ID: CAN_BAT_BASE_ID (0x100)
+ *    - BMS broadcasts data in 18 CAN frames (non-contiguous IDs)
+ *    - CAN IDs: 0x300,0x301,0x303,0x304,0x306,0x309-0x30B,0x30E,0x310-0x315,0x320,0x322,0x32F
  *    - Each frame carries 4 x 16-bit registers (big-endian)
- *    - Frame 0x100: registers[0..3], 0x101: registers[4..7], ...
- *    - Total: 12 frames for 48 registers
+ *    - Total: 18 frames for 72 registers
  *
  *    - TX commands use CAN_BAT_TX_CMD_ID (0x200)
  */
@@ -25,11 +24,31 @@
 #include "task.h"
 #include "cmsis_os.h"
 
-/* ---- CAN ID Configuration ---- */
-#define CAN_BAT_BASE_ID         0x100   /* Base CAN ID for BMS data frames */
-#define CAN_BAT_FRAME_COUNT     12      /* Number of RX frames (48 regs / 4 per frame) */
+/* ---- CAN ID Configuration (VMO_SinglePack_DBC_V0_1) ---- */
+#define CAN_BAT_BASE_ID         0x300   /* Lowest CAN ID in DBC (PACK_ControlSystem) */
+#define CAN_BAT_FRAME_COUNT     18      /* Number of distinct CAN messages */
 #define CAN_BAT_REGS_PER_FRAME  4       /* 16-bit registers per CAN frame (8 bytes / 2) */
 #define CAN_BAT_TX_CMD_ID       0x200   /* CAN ID for sending commands to BMS */
+
+/* CAN message frame indices */
+#define CAN_BAT_FRM_CONTROL_SYS       0   /* 0x300 PACK_ControlSystem */
+#define CAN_BAT_FRM_CHARGING           1   /* 0x301 PACK_InfoCharging */
+#define CAN_BAT_FRM_BMS                2   /* 0x303 PACK_InfoBms */
+#define CAN_BAT_FRM_CELL_BALANCING     3   /* 0x304 PACK_InfoCellBalancing */
+#define CAN_BAT_FRM_DEM_CELL           4   /* 0x306 PACK_InfoDemCell */
+#define CAN_BAT_FRM_PACK               5   /* 0x309 PACK_InfoPack */
+#define CAN_BAT_FRM_SOX                6   /* 0x30A PACK_InfoSox */
+#define CAN_BAT_FRM_ACCUM              7   /* 0x30B PACK_AccumDsgChgCapacity */
+#define CAN_BAT_FRM_CONTACTOR          8   /* 0x30E PACK_InfoContactor */
+#define CAN_BAT_FRM_VCELL_INFO         9   /* 0x310 PACK_InfoVoltageCell */
+#define CAN_BAT_FRM_VCELL1            10   /* 0x311 PACK_InfoVoltageCell1 */
+#define CAN_BAT_FRM_VCELL2            11   /* 0x312 PACK_InfoVoltageCell2 */
+#define CAN_BAT_FRM_VCELL3            12   /* 0x313 PACK_InfoVoltageCell3 */
+#define CAN_BAT_FRM_VCELL4            13   /* 0x314 PACK_InfoVoltageCell4 */
+#define CAN_BAT_FRM_DEM_BMS           14   /* 0x315 PACK_InfoDemBMS */
+#define CAN_BAT_FRM_TEMP_CELL         15   /* 0x320 PACK_InfoTemperatureCell */
+#define CAN_BAT_FRM_TEMP_CB           16   /* 0x322 PACK_InfoTemperatureCB */
+#define CAN_BAT_FRM_VERSION           17   /* 0x32F PACK_InfoPackVersion */
 
 /* ---- Timeout ---- */
 #define CAN_BAT_TIMEOUT_MS      1000    /* Max time (ms) without receiving any frame */
@@ -50,7 +69,7 @@ typedef struct {
     volatile uint16_t rxData[CAN_BAT_FRAME_COUNT * CAN_BAT_REGS_PER_FRAME];
 
     /* Bitmask tracking which frames have been received in current cycle */
-    volatile uint16_t rxFrameMask;
+    volatile uint32_t rxFrameMask;
 
     /* Timestamp of last received frame (tick count) */
     volatile uint32_t lastRxTick;
