@@ -3,29 +3,29 @@
 Firmware cho mạch đọc dữ liệu Pin (BMS) và điều khiển trạm sạc/thay pin.
 MCU STM32F103C8T6, chạy FreeRTOS, giao tiếp CAN Bus với Pack Pin và Modbus RTU RS485 với Master Controller.
 
-## Muc luc
+## Mục lục
 
-- [Tong quan he thong](#tong-quan-he-thong)
-- [Yeu cau phan cung](#yeu-cau-phan-cung)
-- [So do chan GPIO](#so-do-chan-gpio)
-- [Cai dat moi truong phat trien](#cai-dat-moi-truong-phat-trien)
-- [Cau truc thu muc](#cau-truc-thu-muc)
-- [Cau hinh CAN Bus](#cau-hinh-can-bus)
-- [Cau hinh Modbus Slave RS485](#cau-hinh-modbus-slave-rs485)
-- [Huong dan su dung thiet bi](#huong-dan-su-dung-thiet-bi)
-- [Mo hinh trang thai HSM](#mo-hinh-trang-thai-hsm)
-- [Bang thanh ghi du lieu](#bang-thanh-ghi-du-lieu)
-- [Thu vien CAN Battery API](#thu-vien-can-battery-api)
-- [Xay dung va nap firmware](#xay-dung-va-nap-firmware)
-- [Xu ly su co](#xu-ly-su-co)
+- [Tổng quan hệ thống](#tổng-quan-hệ-thống)
+- [Yêu cầu phần cứng](#yêu-cầu-phần-cứng)
+- [Sơ đồ chân GPIO](#sơ-đồ-chân-gpio)
+- [Cài đặt môi trường phát triển](#cài-đặt-môi-trường-phát-triển)
+- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+- [Cấu hình CAN Bus](#cấu-hình-can-bus)
+- [Cấu hình Modbus Slave RS485](#cấu-hình-modbus-slave-rs485)
+- [Hướng dẫn sử dụng thiết bị](#hướng-dẫn-sử-dụng-thiết-bị)
+- [Mô hình trạng thái HSM](#mô-hình-trạng-thái-hsm)
+- [Bảng thanh ghi dữ liệu](#bảng-thanh-ghi-dữ-liệu)
+- [Thư viện CAN Battery API](#thư-viện-can-battery-api)
+- [Xây dựng và nạp firmware](#xây-dựng-và-nạp-firmware)
+- [Xử lý sự cố](#xử-lý-sự-cố)
 
 ---
 
-## Tong quan he thong
+## Tổng quan hệ thống
 
-### Thong so ky thuat
+### Thông số kỹ thuật
 
-| Thong so | Gia tri |
+| Thông số | Giá trị |
 |----------|---------|
 | MCU | STM32F103C8T6 (ARM Cortex-M3) |
 | Flash | 64 KB |
@@ -35,7 +35,7 @@ MCU STM32F103C8T6, chạy FreeRTOS, giao tiếp CAN Bus với Pack Pin và Modbu
 | IDE | STM32CubeIDE |
 | HAL | STM32Cube FW_F1 V1.8.6 |
 
-### Kien truc giao tiep
+### Kiến trúc giao tiếp
 
 ```
 +-------------------+          CAN Bus 1Mbps           +------------------+
@@ -46,31 +46,31 @@ MCU STM32F103C8T6, chạy FreeRTOS, giao tiếp CAN Bus với Pack Pin và Modbu
 |                   |
 |                   |        RS485 Modbus RTU            +------------------+
 |                   |  <------------------------------>  |                  |
-+-------------------+    (Slave, dia chi 1-31)          | Master Controller|
++-------------------+    (Slave, địa chỉ 1-31)          | Master Controller|
                                                         +------------------+
 ```
 
-**Luong du lieu:**
-1. Pack Pin (BMS) tu dong phat quang ba du lieu qua CAN Bus
-2. BSS Slave nhan va luu tru du lieu Pin
-3. Master Controller doc du lieu tu BSS Slave qua Modbus RTU RS485
-4. Master Controller gui lenh dieu khien (sac, dung khan cap) qua Modbus
+**Luồng dữ liệu:**
+1. Pack Pin (BMS) tự động phát quảng bá dữ liệu qua CAN Bus
+2. BSS Slave nhận và lưu trữ dữ liệu Pin
+3. Master Controller đọc dữ liệu từ BSS Slave qua Modbus RTU RS485
+4. Master Controller gửi lệnh điều khiển (sạc, dừng khẩn cấp) qua Modbus
 
 ---
 
-## Yeu cau phan cung
+## Yêu cầu phần cứng
 
-### Linh kien chinh
-- 1x Board STM32F103C8T6 (Blue Pill hoac PCB custom)
-- 1x Thach anh 8MHz
-- 1x CAN Transceiver (MCP2551, TJA1050, hoac SN65HVD230)
+### Linh kiện chính
+- 1x Board STM32F103C8T6 (Blue Pill hoặc PCB custom)
+- 1x Thạch anh 8MHz
+- 1x CAN Transceiver (MCP2551, TJA1050, hoặc SN65HVD230)
 - 1x RS485 Transceiver (MAX485, SP3485)
-- 1x DIP Switch 5 bit (dat dia chi Modbus)
-- 2x Limit Switch (phat hien Pin trong slot)
+- 1x DIP Switch 5 bit (đặt địa chỉ Modbus)
+- 2x Limit Switch (phát hiện Pin trong slot)
 - 3x LED (RUN, FAULT, STATUS)
-- Dien tro termination 120 Ohm cho CAN bus (2 dau bus)
+- Điện trở termination 120 Ohm cho CAN bus (2 đầu bus)
 
-### Ket noi
+### Kết nối
 
 ```
 CAN Bus:   PA11 (CAN_RX) ---|CAN        |--- CANH ---> Pack Pin BMS
@@ -84,28 +84,28 @@ RS485:     PA2 (USART2_TX) --|RS485      |--- A -----> Master Controller
 
 ---
 
-## So do chan GPIO
+## Sơ đồ chân GPIO
 
-### Giao tiep
+### Giao tiếp
 
-| Chan | Ten | Chuc nang | Huong |
+| Chân | Tên | Chức năng | Hướng |
 |------|-----|-----------|-------|
 | PA2 | RS4851_DI | USART2 TX (RS485 COM) | Output AF |
 | PA3 | RS4851_RO | USART2 RX (RS485 COM) | Input |
 | PA4 | RS4851_TXEN | RS485 TX Enable | Output |
-| PA11 | CAN_RX | CAN nhan du lieu tu Pack | Input |
-| PA12 | CAN_TX | CAN phat du lieu | Output AF |
+| PA11 | CAN_RX | CAN nhận dữ liệu từ Pack | Input |
+| PA12 | CAN_TX | CAN phát dữ liệu | Output AF |
 
-### Dieu khien
+### Điều khiển
 
-| Chan | Ten | Chuc nang | Huong |
+| Chân | Tên | Chức năng | Hướng |
 |------|-----|-----------|-------|
-| PA8 | CHARGE_CTRL | Dieu khien sac (HIGH = bat) | Output |
-| PA10 | EMERGENCY | Dung khan cap (HIGH = kich hoat) | Output |
+| PA8 | CHARGE_CTRL | Điều khiển sạc (HIGH = bật) | Output |
+| PA10 | EMERGENCY | Dừng khẩn cấp (HIGH = kích hoạt) | Output |
 
-### DIP Switch (dia chi Modbus)
+### DIP Switch (địa chỉ Modbus)
 
-| Chan | Ten | Bit | Ghi chu |
+| Chân | Tên | Bit | Ghi chú |
 |------|-----|-----|---------|
 | PB0 | ADDR4 | bit 0 | Pull-up, LOW = 1 |
 | PB1 | ADDR3 | bit 1 | Pull-up, LOW = 1 |
@@ -113,136 +113,136 @@ RS485:     PA2 (USART2_TX) --|RS485      |--- A -----> Master Controller
 | PB3 | ADDR1 | bit 3 | Pull-up, LOW = 1 |
 | PB4 | ADDR0 | bit 4 | Pull-up, LOW = 1 |
 
-Dia chi = 0 -> mac dinh la 1. Dai dia chi: 1-31.
+Địa chỉ = 0 thì mặc định là 1. Dải địa chỉ: 1-31.
 
-### LED chi thi
+### LED chỉ thị
 
-| Chan | Ten | Chuc nang |
+| Chân | Tên | Chức năng |
 |------|-----|-----------|
-| PB5 | LED_STT | Nhap nhay khi nhan du lieu tu Master |
-| PB6 | LED_RUN | Sang khi hoat dong binh thuong |
-| PB7 | LED_FAULT | Sang khi co loi hoac mat ket noi |
+| PB5 | LED_STT | Nhấp nháy khi nhận dữ liệu từ Master |
+| PB6 | LED_RUN | Sáng khi hoạt động bình thường |
+| PB7 | LED_FAULT | Sáng khi có lỗi hoặc mất kết nối |
 
-### Cam bien
+### Cảm biến
 
-| Chan | Ten | Chuc nang |
+| Chân | Tên | Chức năng |
 |------|-----|-----------|
-| PB8 | LIMIT_SWITCH0 | Phat hien Pin trong slot |
-| PB9 | LIMIT_SWITCH1 | Phat hien Pin trong slot |
-| PA6 | RD_VOLTAGE | Doc dien ap (Analog) |
+| PB8 | LIMIT_SWITCH0 | Phát hiện Pin trong slot |
+| PB9 | LIMIT_SWITCH1 | Phát hiện Pin trong slot |
+| PA6 | RD_VOLTAGE | Đọc điện áp (Analog) |
 
 ---
 
-## Cai dat moi truong phat trien
+## Cài đặt môi trường phát triển
 
-### Yeu cau
+### Yêu cầu
 
-1. **STM32CubeIDE** >= 1.15.0 (hoac Keil/IAR voi HAL)
-2. **ST-Link V2** hoac **J-Link** de nap firmware
-3. **STM32CubeMX** >= 6.15.0 (neu muon sua cau hinh .ioc)
+1. **STM32CubeIDE** >= 1.15.0 (hoặc Keil/IAR với HAL)
+2. **ST-Link V2** hoặc **J-Link** để nạp firmware
+3. **STM32CubeMX** >= 6.15.0 (nếu muốn sửa cấu hình .ioc)
 
-### Cac buoc
+### Các bước
 
 ```bash
 # 1. Clone repository
 git clone <repository-url>
 cd VMO_RBCS_V2/02_Firmwares/VMO_RBCS_BSS_V2
 
-# 2. Mo project trong STM32CubeIDE
+# 2. Mở project trong STM32CubeIDE
 #    File -> Import -> Existing Projects into Workspace
-#    Chon thu muc VMO_RBCS_BSS_V2
+#    Chọn thư mục VMO_RBCS_BSS_V2
 
 # 3. Build
 #    Project -> Build Project (Ctrl+B)
 
-# 4. Nap firmware
+# 4. Nạp firmware
 #    Run -> Debug As -> STM32 C/C++ Application
 ```
 
 ---
 
-## Cau truc thu muc
+## Cấu trúc thư mục
 
 ```
 VMO_RBCS_BSS_V2/
 |-- Core/
 |   |-- Inc/                    # Header files (main.h, can.h, usart.h, ...)
 |   |-- Src/                    # Source files
-|   |   |-- main.c              # Entry point, clock config, peripheral init
-|   |   |-- can.c               # CAN init, bit timing, RX callback
-|   |   |-- usart.c             # USART2 init (RS485 Modbus Slave)
-|   |   |-- freertos.c          # FreeRTOS tasks (defaultTask, readBatteryTask, commTask)
-|   |   |-- gpio.c              # GPIO init
-|   |   |-- dma.c               # DMA init cho USART2
-|   |   |-- tim.c               # Timer2 init (HSM timer)
-|   |   |-- stm32f1xx_it.c      # Interrupt handlers
+|   |   |-- main.c              # Điểm vào, cấu hình clock, khởi tạo ngoại vi
+|   |   |-- can.c               # Khởi tạo CAN, bit timing, RX callback
+|   |   |-- usart.c             # Khởi tạo USART2 (RS485 Modbus Slave)
+|   |   |-- freertos.c          # Các task FreeRTOS (defaultTask, readBatteryTask, commTask)
+|   |   |-- gpio.c              # Khởi tạo GPIO
+|   |   |-- dma.c               # Khởi tạo DMA cho USART2
+|   |   |-- tim.c               # Khởi tạo Timer2 (HSM timer)
+|   |   |-- stm32f1xx_it.c      # Các hàm xử lý ngắt
 |   |   +-- ...
 |   +-- Startup/
 |
-|-- APP/                        # Ung dung chinh
-|   |-- app_states.h            # Dinh nghia struct, enum, register map
+|-- APP/                        # Ứng dụng chính
+|   |-- app_states.h            # Định nghĩa struct, enum, register map
 |   |-- app_states.c            # HSM state machine (run, fault, bat_not_connected)
-|   +-- app_params.c            # EEPROM init, baudrate config
+|   +-- app_params.c            # Khởi tạo EEPROM, cấu hình baudrate
 |
-|-- CAN-BAT/                    # Thu vien CAN Battery (MOI)
-|   |-- can_battery.h           # Header - API, CAN ID config, struct
-|   +-- can_battery.c           # Implementation - init, filter, RX callback, data access
+|-- CAN-BAT/                    # Thư viện CAN Battery (MỚI)
+|   |-- can_battery.h           # Header - API, cấu hình CAN ID, struct
+|   +-- can_battery.c           # Implementation - init, filter, RX callback, truy xuất dữ liệu
 |
-|-- MODBUS-LIB/                 # Thu vien Modbus RTU (chi con Slave)
+|-- MODBUS-LIB/                 # Thư viện Modbus RTU (chỉ còn Slave)
 |   |-- Modbus.h / Modbus.c
-|   |-- ModbusConfig.h          # Cau hinh: MAX_M_HANDLERS=1 (Slave only)
+|   |-- ModbusConfig.h          # Cấu hình: MAX_M_HANDLERS=1 (chỉ Slave)
 |   +-- UARTCallback.c
 |
-|-- HSM/                        # Hierarchical State Machine library
-|-- EE/                         # EEPROM emulation library
+|-- HSM/                        # Thư viện Hierarchical State Machine
+|-- EE/                         # Thư viện EEPROM emulation
 |-- Drivers/                    # STM32 HAL drivers
 |-- Middlewares/                 # FreeRTOS middleware
 |
-|-- RBCS_READ_BATTERY_DATA.ioc  # STM32CubeMX project file
+|-- RBCS_READ_BATTERY_DATA.ioc  # File project STM32CubeMX
 |-- STM32F103C8TX_FLASH.ld      # Linker script
-+-- README.md                   # File nay
++-- README.md                   # File này
 ```
 
 ---
 
-## Cau hinh CAN Bus
+## Cấu hình CAN Bus
 
-### Thong so bit timing
+### Thông số bit timing
 
-| Thong so | Gia tri | Ghi chu |
+| Thông số | Giá trị | Ghi chú |
 |----------|---------|---------|
 | APB1 Clock | 36 MHz | SYSCLK/2 |
 | Prescaler | 2 | |
 | Time Quantum (TQ) | 55.56 ns | 36MHz / 2 = 18MHz |
-| Sync Seg | 1 TQ | Co dinh |
+| Sync Seg | 1 TQ | Cố định |
 | BS1 (Time Seg 1) | 13 TQ | |
 | BS2 (Time Seg 2) | 4 TQ | |
 | SJW | 2 TQ | |
-| Tong bit time | 18 TQ | 1 + 13 + 4 |
+| Tổng bit time | 18 TQ | 1 + 13 + 4 |
 | **Baud rate** | **1 Mbps** | 18MHz / 18 = 1MHz |
 | **Sample point** | **77.8%** | (1+13)/18 |
 
-### Cac tham so khac
+### Các tham số khác
 
-| Thong so | Gia tri | Y nghia |
+| Thông số | Giá trị | Ý nghĩa |
 |----------|---------|---------|
-| Mode | Normal | Giao tiep binh thuong |
-| AutoBusOff | Enable | Tu phuc hoi khi Bus-Off |
-| AutoWakeUp | Enable | Tu danh thuc |
-| AutoRetransmission | Enable | Tu gui lai khi loi |
+| Mode | Normal | Giao tiếp bình thường |
+| AutoBusOff | Enable | Tự phục hồi khi Bus-Off |
+| AutoWakeUp | Enable | Tự đánh thức |
+| AutoRetransmission | Enable | Tự gửi lại khi lỗi |
 
-### Bo loc CAN (Filter)
+### Bộ lọc CAN (Filter)
 
-- **Filter Bank 0**, che do Mask 32-bit
-- Chap nhan CAN ID: `0x100` - `0x10F`
-- Gan vao RX FIFO0
-- Ngat `CAN_IT_RX_FIFO0_MSG_PENDING` duoc bat
+- **Filter Bank 0**, chế độ Mask 32-bit
+- Chấp nhận CAN ID: `0x100` - `0x10F`
+- Gán vào RX FIFO0
+- Ngắt `CAN_IT_RX_FIFO0_MSG_PENDING` được bật
 
-### Giao thuc CAN tu Pack Pin
+### Giao thức CAN từ Pack Pin
 
-BMS phat quang ba du lieu qua 12 CAN frame. Moi frame chua 4 thanh ghi 16-bit (big-endian):
+BMS phát quảng bá dữ liệu qua 12 CAN frame. Mỗi frame chứa 4 thanh ghi 16-bit (big-endian):
 
-| CAN ID | Noi dung | Thanh ghi |
+| CAN ID | Nội dung | Thanh ghi |
 |--------|----------|-----------|
 | 0x100 | Frame 0 | registers[0..3] |
 | 0x101 | Frame 1 | registers[4..7] |
@@ -250,7 +250,7 @@ BMS phat quang ba du lieu qua 12 CAN frame. Moi frame chua 4 thanh ghi 16-bit (b
 | ... | ... | ... |
 | 0x10B | Frame 11 | registers[44..47] |
 
-**Dinh dang byte trong moi frame (8 bytes):**
+**Định dạng byte trong mỗi frame (8 bytes):**
 ```
 Byte[0] = reg[N] >> 8     (high byte)
 Byte[1] = reg[N] & 0xFF   (low byte)
@@ -262,66 +262,66 @@ Byte[6] = reg[N+3] >> 8
 Byte[7] = reg[N+3] & 0xFF
 ```
 
-> **Luu y:** Neu giao thuc CAN cua BMS khac (vi du DBC `VMO_SinglePack_DBC_V0_1`),
-> ban can sua cac `#define` trong `CAN-BAT/can_battery.h` va ham parse trong
+> **Lưu ý:** Nếu giao thức CAN của BMS khác (ví dụ DBC `VMO_SinglePack_DBC_V0_1`),
+> bạn cần sửa các `#define` trong `CAN-BAT/can_battery.h` và hàm parse trong
 > `CAN_BAT_RxCallback()` (file `CAN-BAT/can_battery.c`).
 
 ---
 
-## Cau hinh Modbus Slave RS485
+## Cấu hình Modbus Slave RS485
 
-### Thong so ket noi
+### Thông số kết nối
 
-| Thong so | Gia tri |
+| Thông số | Giá trị |
 |----------|---------|
 | UART | USART2 (PA2-TX, PA3-RX) |
 | TX Enable | PA4 (RS4851_TXEN) |
-| Dia chi Slave | Tu DIP Switch (1-31) |
-| Baudrate | Tu EEPROM (mac dinh 115200) |
+| Địa chỉ Slave | Từ DIP Switch (1-31) |
+| Baudrate | Từ EEPROM (mặc định 115200) |
 | Data format | 8-N-1 |
-| Giao thuc | Modbus RTU |
-| Che do | DMA |
+| Giao thức | Modbus RTU |
+| Chế độ | DMA |
 | Timeout | 1000 ms |
-| So thanh ghi | 50 (TOTAL_STA_REGISTERS) |
+| Số thanh ghi | 52 (TOTAL_STA_REGISTERS) |
 
-### Bang ma Baudrate
+### Bảng mã Baudrate
 
-Ma baudrate duoc luu trong EEPROM, cai dat qua DIP Switch:
+Mã baudrate được lưu trong EEPROM, cài đặt qua DIP Switch:
 
-| Ma | Baudrate | Ma | Baudrate |
+| Mã | Baudrate | Mã | Baudrate |
 |----|----------|----|----------|
 | 1 | 1200 | 6 | 19200 |
 | 2 | 2400 | 7 | 38400 |
 | 3 | 4800 | 8 | 56000 |
 | 4 | 9600 | 9 | 57600 |
-| 5 | 14400 | 10 | 115200 (mac dinh) |
+| 5 | 14400 | 10 | 115200 (mặc định) |
 
 ---
 
-## Huong dan su dung thiet bi
+## Hướng dẫn sử dụng thiết bị
 
-### 1. Ket noi phan cung
+### 1. Kết nối phần cứng
 
-1. Cap nguon cho board (3.3V hoac 5V tuy thiet ke PCB)
-2. Ket noi CAN transceiver:
-   - PA11 -> CAN_RX cua transceiver
-   - PA12 -> CAN_TX cua transceiver
-   - CANH, CANL -> Bus CAN cua Pack Pin
-   - Gan dien tro 120 Ohm o hai dau bus CAN
-3. Ket noi RS485 transceiver:
+1. Cấp nguồn cho board (3.3V hoặc 5V tùy thiết kế PCB)
+2. Kết nối CAN transceiver:
+   - PA11 -> CAN_RX của transceiver
+   - PA12 -> CAN_TX của transceiver
+   - CANH, CANL -> Bus CAN của Pack Pin
+   - Gắn điện trở 120 Ohm ở hai đầu bus CAN
+3. Kết nối RS485 transceiver:
    - PA2 -> DI (Data In)
    - PA3 -> RO (Receiver Out)
    - PA4 -> DE/RE (Direction Enable)
-   - A, B -> Bus RS485 cua Master Controller
-4. Ket noi Limit Switch vao PB8, PB9 (noi GND khi kich hoat)
-5. Ket noi DIP Switch 5 bit vao PB0-PB4
+   - A, B -> Bus RS485 của Master Controller
+4. Kết nối Limit Switch vào PB8, PB9 (nối GND khi kích hoạt)
+5. Kết nối DIP Switch 5 bit vào PB0-PB4
 
-### 2. Cai dat dia chi Modbus
+### 2. Cài đặt địa chỉ Modbus
 
-Dung DIP Switch 5 bit (ADDR4..ADDR0) de dat dia chi:
+Dùng DIP Switch 5 bit (ADDR4..ADDR0) để đặt địa chỉ:
 
 ```
-Vi du: Dia chi = 5
+Ví dụ: Địa chỉ = 5
   ADDR4 (PB0) = OFF  (bit0 = 1)
   ADDR3 (PB1) = ON   (bit1 = 0)
   ADDR2 (PB2) = OFF  (bit2 = 1)
@@ -330,251 +330,251 @@ Vi du: Dia chi = 5
   -> addr = 0b00101 = 5
 ```
 
-**Luu y:** Logic dao - cong tac BAT (noi GND) = bit 1.
+**Lưu ý:** Logic đảo - công tắc BẬT (nối GND) = bit 1.
 
-### 3. Cai dat Baudrate (lan dau)
+### 3. Cài đặt Baudrate (lần đầu)
 
-1. Dat tat ca DIP Switch ve `OFF` (dia chi = 0) -> vao che do cai dat
-2. LED_RUN se nhap nhay (500ms)
-3. Gat DIP Switch den gia tri baudrate mong muon (1-10)
-4. Giu nguyen 5 giay, LED_RUN sang lien -> da luu vao EEPROM
-5. Reset thiet bi
-6. Dat lai DIP Switch ve dia chi Modbus thuc te
+1. Đặt tất cả DIP Switch về `OFF` (địa chỉ = 0) -> vào chế độ cài đặt
+2. LED_RUN sẽ nhấp nháy (500ms)
+3. Gạt DIP Switch đến giá trị baudrate mong muốn (1-10)
+4. Giữ nguyên 5 giây, LED_RUN sáng liên -> đã lưu vào EEPROM
+5. Reset thiết bị
+6. Đặt lại DIP Switch về địa chỉ Modbus thực tế
 
-### 4. Hoat dong binh thuong
+### 4. Hoạt động bình thường
 
-Sau khi khoi dong voi dia chi hop le (1-31):
+Sau khi khởi động với địa chỉ hợp lệ (1-31):
 
-1. **LED_RUN sang lien** -> Thiet bi hoat dong binh thuong
-2. Khi Pin duoc dat vao slot -> Limit Switch kich hoat
-3. Thiet bi tu dong nhan du lieu tu Pack Pin qua CAN Bus
-4. Master Controller doc du lieu qua Modbus RTU (Function Code 0x03)
-5. **LED_STT nhap nhay nhanh** -> Dang giao tiep voi Master
-6. Master co the gui lenh:
-   - `REG_STA_CHRG_CTRL = 1` -> Bat sac
-   - `REG_STA_IS_EMERGENCY_STOP = 1` -> Dung khan cap
+1. **LED_RUN sáng liên** -> Thiết bị hoạt động bình thường
+2. Khi Pin được đặt vào slot -> Limit Switch kích hoạt
+3. Thiết bị tự động nhận dữ liệu từ Pack Pin qua CAN Bus
+4. Master Controller đọc dữ liệu qua Modbus RTU (Function Code 0x03)
+5. **LED_STT nhấp nháy nhanh** -> Đang giao tiếp với Master
+6. Master có thể gửi lệnh:
+   - `REG_STA_CHRG_CTRL = 1` -> Bật sạc
+   - `REG_STA_IS_EMERGENCY_STOP = 1` -> Dừng khẩn cấp
 
-### 5. Chi thi LED
+### 5. Chỉ thị LED
 
-| Trang thai | LED_RUN | LED_FAULT | LED_STT |
+| Trạng thái | LED_RUN | LED_FAULT | LED_STT |
 |------------|---------|-----------|---------|
-| Cai dat baudrate | Nhap nhay 500ms | Tat | Tat |
-| Binh thuong | Sang | Tat | Nhap nhay khi nhan lenh |
-| Loi BMS | Tat | Sang | Tat |
-| Mat ket noi Pin | Tat | Nhap nhay 500ms | Tat |
+| Cài đặt baudrate | Nhấp nháy 500ms | Tắt | Tắt |
+| Bình thường | Sáng | Tắt | Nhấp nháy khi nhận lệnh |
+| Lỗi BMS | Tắt | Sáng | Tắt |
+| Mất kết nối Pin | Tắt | Nhấp nháy 500ms | Tắt |
 
 ---
 
-## Mo hinh trang thai HSM
+## Mô hình trạng thái HSM
 
 ```
                 +--------------------+
-                |  Cai dat Baudrate  |  (dia chi = 0)
+                | Cài đặt Baudrate   |  (địa chỉ = 0)
                 +--------------------+
                          |
-                    dia chi != 0
+                   địa chỉ != 0
                          v
                   +-------------+
-           +----->|    Chay     |<------+
+           +----->|    Chạy     |<------+
            |      +-------------+       |
            |         |       |          |
-           |    co FAULT  timeout>=5    |
+           |    có FAULT  timeout>=5    |
            |         v       v          |
            |   +-------+ +----------+  |
-           +---|  Loi  | | Mat ket  |--+
-           |   +-------+ | noi Pin |   |
+           +---|  Lỗi  | | Mất kết  |--+
+           |   +-------+ | nối Pin  |  |
            |      ^      +----------+  |
            |      |          |         |
            |      +----------+         |
-           |       co FAULT            |
+           |       có FAULT            |
            +---------------------------+
-              Limit Switch tat hoac
-              nhan OK + khong loi
+              Limit Switch tắt hoặc
+              nhận OK + không lỗi
 ```
 
-### Chi tiet chuyen trang thai
+### Chi tiết chuyển trạng thái
 
-| Tu | Den | Dieu kien |
+| Từ | Đến | Điều kiện |
 |----|-----|-----------|
-| Chay | Loi | Nhan du lieu OK nhung co FAULT |
-| Chay | Mat ket noi | CAN timeout >= 5 lan lien tiep |
-| Loi | Chay | Limit Switch tat HOAC nhan OK + khong FAULT |
-| Mat ket noi | Chay | Limit Switch tat HOAC nhan OK + khong FAULT |
-| Mat ket noi | Loi | Nhan OK nhung co FAULT |
+| Chạy | Lỗi | Nhận dữ liệu OK nhưng có FAULT |
+| Chạy | Mất kết nối | CAN timeout >= 5 lần liên tiếp |
+| Lỗi | Chạy | Limit Switch tắt HOẶC nhận OK + không FAULT |
+| Mất kết nối | Chạy | Limit Switch tắt HOẶC nhận OK + không FAULT |
+| Mất kết nối | Lỗi | Nhận OK nhưng có FAULT |
 
 ---
 
-## Bang thanh ghi du lieu
+## Bảng thanh ghi dữ liệu
 
-### Thanh ghi Pin (Battery Registers) - Doc tu CAN
+### Thanh ghi Pin (Battery Registers) - Đọc từ CAN
 
-48 thanh ghi 16-bit, thu tu trong `dataBattery[]`:
+48 thanh ghi 16-bit, thứ tự trong `dataBattery[]`:
 
-| Chi so | Ten | Mo ta |
+| Chỉ số | Tên | Mô tả |
 |--------|-----|-------|
-| 0 | BMS_STATE | Trang thai BMS |
-| 1 | CTRL_REQUEST | Yeu cau dieu khien |
-| 2 | CTRL_RESPONSE | Phan hoi dieu khien |
-| 3 | FET_CTRL_PIN | Chan dieu khien FET |
-| 4 | FET_STATUS | Trang thai FET |
-| 5 | ALARM_BITS | Bit canh bao |
-| 6 | FAULTS | Ma loi |
-| 7 | PACK_VOLT | Dien ap Pack |
-| 8 | STACK_VOLT | Dien ap Stack |
-| 9-10 | PACK_CURRENT | Dong dien Pack (High/Low) |
-| 11 | ID_VOLT | Dien ap nhan dang |
-| 12-17 | TEMP1/2/3 | Nhiet do 3 cam bien (High/Low) |
-| 18-29 | CELL1-CELL12 | Dien ap Cell 1-12 |
-| 30-32 | CELL_NONE | Du phong |
-| 33 | CELL13 | Dien ap Cell 13 |
-| 34-36 | SAFETY_A/B/C | Thanh ghi an toan |
-| 37-38 | ACCU_INT | Tich luy (nguyen) H/L |
-| 39-40 | ACCU_FRAC | Tich luy (thap phan) H/L |
-| 41-42 | ACCU_TIME | Thoi gian tich luy H/L |
-| 43 | PIN_PERCENT | Phan tram Pin |
-| 44 | PERCENT_TARGET | Phan tram muc tieu |
-| 45 | CELL_RESISTANCE | Dien tro Cell |
+| 0 | BMS_STATE | Trạng thái BMS |
+| 1 | CTRL_REQUEST | Yêu cầu điều khiển |
+| 2 | CTRL_RESPONSE | Phản hồi điều khiển |
+| 3 | FET_CTRL_PIN | Chân điều khiển FET |
+| 4 | FET_STATUS | Trạng thái FET |
+| 5 | ALARM_BITS | Bit cảnh báo |
+| 6 | FAULTS | Mã lỗi |
+| 7 | PACK_VOLT | Điện áp Pack |
+| 8 | STACK_VOLT | Điện áp Stack |
+| 9-10 | PACK_CURRENT | Dòng điện Pack (High/Low) |
+| 11 | ID_VOLT | Điện áp nhận dạng |
+| 12-17 | TEMP1/2/3 | Nhiệt độ 3 cảm biến (High/Low) |
+| 18-29 | CELL1-CELL12 | Điện áp Cell 1-12 |
+| 30-32 | CELL_NONE | Dự phòng |
+| 33 | CELL13 | Điện áp Cell 13 |
+| 34-36 | SAFETY_A/B/C | Thanh ghi an toàn |
+| 37-38 | ACCU_INT | Tích lũy (nguyên) H/L |
+| 39-40 | ACCU_FRAC | Tích lũy (thập phân) H/L |
+| 41-42 | ACCU_TIME | Thời gian tích lũy H/L |
+| 43 | PIN_PERCENT | Phần trăm Pin |
+| 44 | PERCENT_TARGET | Phần trăm mục tiêu |
+| 45 | CELL_RESISTANCE | Điện trở Cell |
 | 46 | SOC_PERCENT | SOC (%) |
 | 47 | SOH_VALUE | SOH (%) |
 
-### Thanh ghi Station (Modbus Slave Registers) - Master doc/ghi
+### Thanh ghi Station (Modbus Slave Registers) - Master đọc/ghi
 
-50 thanh ghi, bao gom toan bo thanh ghi Pin + 4 thanh ghi bo sung:
+52 thanh ghi, bao gồm toàn bộ thanh ghi Pin + 4 thanh ghi bổ sung:
 
-| Chi so | Ten | Mo ta | Doc/Ghi |
+| Chỉ số | Tên | Mô tả | Đọc/Ghi |
 |--------|-----|-------|---------|
-| 0-47 | (nhu tren) | Du lieu Pin copy tu CAN | Doc |
-| 48 | IS_PIN_IN_SLOT | Pin trong slot (0=Trong, 1=Day) | Doc |
-| 49 | IS_PIN_TIMEOUT | CAN timeout (0=OK, 1=Timeout) | Doc |
-| 50 | IS_EMERGENCY_STOP | Lenh dung khan cap | Ghi |
-| 51 | CHRG_CTRL | Lenh dieu khien sac | Ghi |
+| 0-47 | (như trên) | Dữ liệu Pin copy từ CAN | Đọc |
+| 48 | IS_PIN_IN_SLOT | Pin trong slot (0=Trống, 1=Đầy) | Đọc |
+| 49 | IS_PIN_TIMEOUT | CAN timeout (0=OK, 1=Timeout) | Đọc |
+| 50 | IS_EMERGENCY_STOP | Lệnh dừng khẩn cấp | Ghi |
+| 51 | CHRG_CTRL | Lệnh điều khiển sạc | Ghi |
 
 ---
 
-## Thu vien CAN Battery API
+## Thư viện CAN Battery API
 
-File: `CAN-BAT/can_battery.h` va `CAN-BAT/can_battery.c`
+File: `CAN-BAT/can_battery.h` và `CAN-BAT/can_battery.c`
 
-### Cau hinh (sua trong can_battery.h)
+### Cấu hình (sửa trong can_battery.h)
 
 ```c
-#define CAN_BAT_BASE_ID         0x100   // CAN ID dau tien cua BMS
-#define CAN_BAT_FRAME_COUNT     12      // So frame CAN (48 regs / 4 per frame)
-#define CAN_BAT_REGS_PER_FRAME  4       // So thanh ghi 16-bit moi frame
-#define CAN_BAT_TX_CMD_ID       0x200   // CAN ID gui lenh den BMS
+#define CAN_BAT_BASE_ID         0x100   // CAN ID đầu tiên của BMS
+#define CAN_BAT_FRAME_COUNT     12      // Số frame CAN (48 regs / 4 per frame)
+#define CAN_BAT_REGS_PER_FRAME  4       // Số thanh ghi 16-bit mỗi frame
+#define CAN_BAT_TX_CMD_ID       0x200   // CAN ID gửi lệnh đến BMS
 #define CAN_BAT_TIMEOUT_MS      1000    // Timeout (ms)
 ```
 
-### Cac ham API
+### Các hàm API
 
 ```c
-// Khoi tao driver: cau hinh filter, start CAN, bat ngat
+// Khởi tạo driver: cấu hình filter, start CAN, bật ngắt
 CAN_BAT_Status_t CAN_BAT_Init(CAN_BAT_Handle_t *handle, CAN_HandleTypeDef *hcan);
 
-// Kiem tra timeout
+// Kiểm tra timeout
 uint8_t CAN_BAT_IsTimeout(CAN_BAT_Handle_t *handle);
 
-// Kiem tra da nhan du du lieu chua
+// Kiểm tra đã nhận đủ dữ liệu chưa
 uint8_t CAN_BAT_IsDataReady(CAN_BAT_Handle_t *handle);
 
-// Copy du lieu Pin ra buffer (thread-safe)
+// Copy dữ liệu Pin ra buffer (thread-safe)
 CAN_BAT_Status_t CAN_BAT_GetData(CAN_BAT_Handle_t *handle, uint16_t *dest, uint16_t count);
 
-// Gui lenh den BMS (toi da 8 byte)
+// Gửi lệnh đến BMS (tối đa 8 byte)
 CAN_BAT_Status_t CAN_BAT_SendCommand(CAN_BAT_Handle_t *handle, uint8_t *data, uint8_t len);
 
-// Dat task nhan notification khi du lieu san sang
+// Đặt task nhận notification khi dữ liệu sẵn sàng
 void CAN_BAT_SetNotifyTask(CAN_BAT_Handle_t *handle, TaskHandle_t taskHandle);
 
-// Goi tu HAL_CAN_RxFifo0MsgPendingCallback (da duoc goi tu can.c)
+// Gọi từ HAL_CAN_RxFifo0MsgPendingCallback (đã được gọi từ can.c)
 void CAN_BAT_RxCallback(CAN_BAT_Handle_t *handle);
 ```
 
-### Cach hoat dong
+### Cách hoạt động
 
-1. **`CAN_BAT_Init()`** cau hinh filter CAN, bat CAN, bat ngat RX FIFO0
-2. Khi CAN frame den -> **ISR** goi `CAN_BAT_RxCallback()` tu dong
-3. Callback phan tich CAN ID, luu 4 thanh ghi 16-bit vao buffer
-4. Khi nhan du 12 frame -> dat co `dataReady` va notify task dang cho
-5. **`StartReadBatteryTask`** nhan notification, goi `CAN_BAT_GetData()` de copy du lieu
-6. Du lieu duoc chuyen vao `dataBattery[]` -> copy sang `dataModbusSlave[]` khi Master doc
+1. **`CAN_BAT_Init()`** cấu hình filter CAN, bật CAN, bật ngắt RX FIFO0
+2. Khi CAN frame đến -> **ISR** gọi `CAN_BAT_RxCallback()` tự động
+3. Callback phân tích CAN ID, lưu 4 thanh ghi 16-bit vào buffer
+4. Khi nhận đủ 12 frame -> đặt cờ `dataReady` và notify task đang chờ
+5. **`StartReadBatteryTask`** nhận notification, gọi `CAN_BAT_GetData()` để copy dữ liệu
+6. Dữ liệu được chuyển vào `dataBattery[]` -> copy sang `dataModbusSlave[]` khi Master đọc
 
 ---
 
-## Xay dung va nap firmware
+## Xây dựng và nạp firmware
 
-### Build voi STM32CubeIDE
+### Build với STM32CubeIDE
 
-1. Mo project trong STM32CubeIDE
-2. Chon Build Configuration: **Debug** hoac **Release**
+1. Mở project trong STM32CubeIDE
+2. Chọn Build Configuration: **Debug** hoặc **Release**
 3. `Project -> Build Project` (Ctrl+B)
-4. Kiem tra output: `Debug/RBCS_READ_BATTERY_DATA.elf`
+4. Kiểm tra output: `Debug/RBCS_READ_BATTERY_DATA.elf`
 
-### Nap firmware
+### Nạp firmware
 
 **Qua ST-Link:**
 ```
 Run -> Debug As -> STM32 C/C++ Application
 ```
 
-**Qua command line (dung STM32CubeProgrammer):**
+**Qua command line (dùng STM32CubeProgrammer):**
 ```bash
 STM32_Programmer_CLI -c port=SWD -w Debug/RBCS_READ_BATTERY_DATA.elf -v -rst
 ```
 
-### Sua cau hinh CubeMX
+### Sửa cấu hình CubeMX
 
-Neu muon thay doi cau hinh ngoai vi:
-1. Mo file `RBCS_READ_BATTERY_DATA.ioc` bang STM32CubeMX
-2. Sua cau hinh
+Nếu muốn thay đổi cấu hình ngoại vi:
+1. Mở file `RBCS_READ_BATTERY_DATA.ioc` bằng STM32CubeMX
+2. Sửa cấu hình
 3. Generate Code
-4. **Luu y:** Code trong vung `USER CODE BEGIN/END` se duoc giu lai
+4. **Lưu ý:** Code trong vùng `USER CODE BEGIN/END` sẽ được giữ lại
 
 ---
 
-## Xu ly su co
+## Xử lý sự cố
 
-### LED_FAULT sang lien (trang thai Loi)
+### LED_FAULT sáng liên (trạng thái Lỗi)
 
-- **Nguyen nhan:** BMS bao loi (thanh ghi FAULTS != 0)
-- **Xu ly:** Kiem tra trang thai Pin, thao Pin ra va lap lai. Neu loi van con, kiem tra BMS.
+- **Nguyên nhân:** BMS báo lỗi (thanh ghi FAULTS != 0)
+- **Xử lý:** Kiểm tra trạng thái Pin, tháo Pin ra và lắp lại. Nếu lỗi vẫn còn, kiểm tra BMS.
 
-### LED_FAULT nhap nhay (trang thai Mat ket noi)
+### LED_FAULT nhấp nháy (trạng thái Mất kết nối)
 
-- **Nguyen nhan:** Khong nhan duoc du lieu CAN tu Pack Pin trong 5 giay (5 x 1s timeout)
-- **Xu ly:**
-  1. Kiem tra ket noi CAN (CANH, CANL, GND)
-  2. Kiem tra dien tro termination 120 Ohm
-  3. Kiem tra CAN transceiver co nguon chua
-  4. Kiem tra Pack Pin co hoat dong (co phat CAN) khong
-  5. Kiem tra baud rate CAN phai khop (1 Mbps)
+- **Nguyên nhân:** Không nhận được dữ liệu CAN từ Pack Pin trong 5 giây (5 x 1s timeout)
+- **Xử lý:**
+  1. Kiểm tra kết nối CAN (CANH, CANL, GND)
+  2. Kiểm tra điện trở termination 120 Ohm
+  3. Kiểm tra CAN transceiver có nguồn chưa
+  4. Kiểm tra Pack Pin có hoạt động (có phát CAN) không
+  5. Kiểm tra baud rate CAN phải khớp (1 Mbps)
 
-### Master khong doc duoc du lieu Modbus
+### Master không đọc được dữ liệu Modbus
 
-- **Xu ly:**
-  1. Kiem tra dia chi DIP Switch (phai khop voi cau hinh Master)
-  2. Kiem tra baudrate (xem muc "Cai dat Baudrate")
-  3. Kiem tra ket noi RS485 (A, B, GND)
-  4. Kiem tra TX Enable (PA4)
+- **Xử lý:**
+  1. Kiểm tra địa chỉ DIP Switch (phải khớp với cấu hình Master)
+  2. Kiểm tra baudrate (xem mục "Cài đặt Baudrate")
+  3. Kiểm tra kết nối RS485 (A, B, GND)
+  4. Kiểm tra TX Enable (PA4)
 
-### LED_RUN khong sang khi khoi dong
+### LED_RUN không sáng khi khởi động
 
-- **Nguyen nhan:** DIP Switch dat dia chi = 0 -> vao che do cai dat baudrate
-- **Xu ly:** LED_RUN se nhap nhay. Dat DIP Switch ve dia chi mong muon (1-31), doi 5 giay, reset thiet bi.
+- **Nguyên nhân:** DIP Switch đặt địa chỉ = 0 -> vào chế độ cài đặt baudrate
+- **Xử lý:** LED_RUN sẽ nhấp nháy. Đặt DIP Switch về địa chỉ mong muốn (1-31), đợi 5 giây, reset thiết bị.
 
-### Khong nhan duoc CAN du da ket noi dung
+### Không nhận được CAN dù đã kết nối đúng
 
-- Kiem tra sample point va baud rate phai khop giua 2 node
-- Hien tai cau hinh: **1 Mbps, sample point 77.8%**
-- Chieu dai bus CAN toi da o 1 Mbps: khoang **25m** (day twisted pair co shield)
-- Neu bus dai hon, giam baud rate (sua Prescaler trong CubeMX)
+- Kiểm tra sample point và baud rate phải khớp giữa 2 node
+- Hiện tại cấu hình: **1 Mbps, sample point 77.8%**
+- Chiều dài bus CAN tối đa ở 1 Mbps: khoảng **25m** (dây twisted pair có shield)
+- Nếu bus dài hơn, giảm baud rate (sửa Prescaler trong CubeMX)
 
 ---
 
-## Tham khao
+## Tham khảo
 
 - DBC file: `04_Documents/CANdb/VMO_SinglePack_DBC_V0_1.dbc`
-- Flowchart chi tiet: `VMO_RBCS_BSS_V2_Flowchart.md`
+- Flowchart chi tiết: `VMO_RBCS_BSS_V2_Flowchart.md`
 - STM32F103 Reference Manual: RM0008
 - STM32 HAL CAN documentation
 - Modbus RTU specification
