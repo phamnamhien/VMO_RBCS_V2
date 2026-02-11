@@ -36,7 +36,6 @@ Mạch BSS V2 là bộ đọc và điều khiển Pin dùng trong trạm sạc/t
 | Thông số | Giá trị |
 |----------|---------|
 | Nguồn cấp | Jack nguồn DC riêng (onboard) |
-| Vi xử lý | STM32F103C8T6 |
 | Giao tiếp Pin | CAN Bus 2.0A, 1 Mbps |
 | Giao tiếp Master | RS485 Half-duplex, Modbus RTU |
 | Baudrate RS485 | Cấu hình được (1200 - 115200 bps) |
@@ -45,7 +44,6 @@ Mạch BSS V2 là bộ đọc và điều khiển Pin dùng trong trạm sạc/t
 | Cảm biến slot | 2x Limit Switch (phát hiện Pin) |
 | Ngõ ra điều khiển | 1x Điều khiển sạc, 1x Dừng khẩn cấp |
 | Chỉ thị | 3x LED (RUN, FAULT, STATUS) |
-| Kích thước | Theo thiết kế PCB |
 
 ---
 
@@ -59,8 +57,6 @@ Mạch BSS V2 là bộ đọc và điều khiển Pin dùng trong trạm sạc/t
 |-----------|-------|
 | CANH | CAN High |
 | CANL | CAN Low |
-
-> **Yêu cầu:** Gắn điện trở termination **120 Ohm** giữa CANH và CANL ở **hai đầu bus**. Chiều dài bus tối đa ở 1 Mbps: khoảng 25m (dùng dây xoắn đôi có bọc chống nhiễu).
 
 #### Cổng RS485 (kết nối Master Controller)
 
@@ -123,7 +119,7 @@ Cắm nguồn DC vào jack nguồn riêng trên board. Board có mạch ổn áp
 
 ```
 Mạch BSS                              Pack Pin (BMS)
-  CANH ──── [120R] ──── dây ──── [120R] ──── CANH
+  CANH ──────────────── dây ──────────────── CANH
   CANL ──────────────── dây ──────────────── CANL
 ```
 
@@ -627,16 +623,6 @@ Thiết bị coi dữ liệu hợp lệ khi nhận đủ cả 18 frame. Nếu kh
 | Mất nguồn | Kiểm tra jack nguồn DC và nguồn cấp |
 | MCU bị treo | Nhấn nút Reset hoặc tắt/bật nguồn |
 | Firmware lỗi | Nạp lại firmware qua ST-Link |
-
----
-
-## 11. Thông tin bảo trì
-
-- **Không** có linh kiện nào cần thay thế định kỳ
-- **Không** mở nắp thiết bị khi đang cấp nguồn
-- Bảo quản ở nơi khô ráo, tránh ẩm ướt và bụi bẩn
-- Nhiệt độ hoạt động: -20°C đến +70°C
-- Kiểm tra kết nối dây CAN và RS485 định kỳ, đảm bảo không bị oxy hóa hoặc lỏng
 
 ---
 
