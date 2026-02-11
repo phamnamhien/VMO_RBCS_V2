@@ -115,7 +115,6 @@ Cắm nguồn DC vào jack nguồn riêng trên board. Board có mạch ổn áp
 
 1. Nối **CANH** của mạch BSS với **CANH** của Pack Pin (BMS)
 2. Nối **CANL** của mạch BSS với **CANL** của Pack Pin (BMS)
-3. Gắn điện trở **120 Ohm** giữa CANH-CANL ở cả hai đầu bus
 
 ```
 Mạch BSS                              Pack Pin (BMS)
