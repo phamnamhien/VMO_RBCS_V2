@@ -19,8 +19,8 @@ Mạch BSS V2 là bộ đọc và điều khiển Pin dùng trong trạm sạc/t
 
 ```
                                 CAN Bus (1 Mbps)
-    +-------------+         CANH ──────────── CANH         +-------------+
-    |             | ◄────── CANL ──────────── CANL ──────► |             |
+    +-------------+         CANH ──────────── CANH          +-------------+
+    |             | ◄────── CANL ──────────── CANL ──────►  |             |
     |  Mạch BSS   |                                         |  Pack Pin   |
     |  (Slave)    |                                         |  (BMS)      |
     |             |         RS485 Modbus RTU                +-------------+
